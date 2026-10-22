@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
-from app.models.risk_score import RiskRating
 
 
 class RiskScoreBase(BaseModel):
@@ -16,8 +15,8 @@ class RiskScoreCreate(RiskScoreBase):
 class RiskScoreResponse(BaseModel):
     id: int
     application_id: int
-    overall_score: float = Field(ge=0, le=100)
-    rating: RiskRating
+    overall_score: float = Field(ge=0, le=10)
+    rating: str
 
     # Factor breakdown
     cvss_weighted: Optional[float] = 0.0
@@ -46,4 +45,4 @@ class RiskScoreResponse(BaseModel):
 class RiskTrendPoint(BaseModel):
     date: datetime
     score: float
-    rating: RiskRating
+    rating: str

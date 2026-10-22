@@ -1,16 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
-import enum
-
-
-class RiskRating(str, enum.Enum):
-    LOW = "Low"
-    MODERATE = "Moderate"
-    HIGH = "High"
-    VERY_HIGH = "Very High"
-    CRITICAL = "Critical"
 
 
 class RiskScore(Base):
@@ -25,16 +16,16 @@ class RiskScore(Base):
     # Which application this score belongs to
     application_id = Column(
         Integer,
-        ForeignKey("applications.id", ondelete="CASCADE"),
+        ForeignKey("applications.id"),
         nullable=False,
         index=True
     )
 
-    # The final calculated score (0-100)
+    # The final calculated score (0-10)
     overall_score = Column(Float, nullable=False)
 
     # Human readable rating derived from score
-    rating = Column(SQLEnum(RiskRating), nullable=False)
+    rating = Column(String, nullable=False)
 
     # Individual factor scores (stored for transparency)
     cvss_weighted = Column(Float, nullable=True, default=0.0)
@@ -53,7 +44,7 @@ class RiskScore(Base):
 
     # Metadata
     calculated_at = Column(
-        DateTime(timezone=True),
+        DateTime,
         server_default=func.now(),
         nullable=False
     )

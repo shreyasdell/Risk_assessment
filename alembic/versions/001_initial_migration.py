@@ -26,8 +26,8 @@ def upgrade() -> None:
         sa.Column('hashed_password', sa.String(), nullable=False),
         sa.Column('is_active', sa.Boolean(), nullable=True),
         sa.Column('is_admin', sa.Boolean(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
@@ -44,8 +44,8 @@ def upgrade() -> None:
         sa.Column('contact', sa.String(), nullable=True),
         sa.Column('service_type', sa.String(), nullable=True),
         sa.Column('hosting_model', sa.String(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_vendors_id'), 'vendors', ['id'], unique=False)
@@ -59,13 +59,13 @@ def upgrade() -> None:
         sa.Column('description', sa.String(), nullable=True),
         sa.Column('owner', sa.String(), nullable=True),
         sa.Column('business_unit', sa.String(), nullable=True),
-        sa.Column('criticality', sa.Enum('low', 'medium', 'high', 'critical', name='criticalityenum'), nullable=True),
+        sa.Column('criticality', sa.String(), nullable=True),  # Changed from Enum to String for SQLite
         sa.Column('internet_facing', sa.Boolean(), nullable=True),
-        sa.Column('data_classification', sa.Enum('public', 'internal', 'confidential', 'restricted', name='dataclassificationenum'), nullable=True),
-        sa.Column('environment', sa.Enum('development', 'staging', 'production', name='environmentenum'), nullable=True),
+        sa.Column('data_classification', sa.String(), nullable=True),  # Changed from Enum to String for SQLite
+        sa.Column('environment', sa.String(), nullable=True),  # Changed from Enum to String for SQLite
         sa.Column('vendor_id', sa.Integer(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['vendor_id'], ['vendors.id'], ),
         sa.PrimaryKeyConstraint('id')
     )

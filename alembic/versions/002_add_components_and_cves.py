@@ -23,7 +23,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
         sa.Column('version', sa.String(), nullable=False),
-        sa.Column('component_type', sa.Enum('library', 'framework', 'sdk', 'tool', 'platform', 'operating_system', 'database', 'other', name='componenttypeenum'), nullable=True),
+        sa.Column('component_type', sa.String(), nullable=True),  # Changed from Enum to String for SQLite
         sa.Column('purl', sa.String(), nullable=True),
         sa.Column('supplier', sa.String(), nullable=True),
         sa.Column('description', sa.Text(), nullable=True),
@@ -31,8 +31,8 @@ def upgrade() -> None:
         sa.Column('cpe', sa.String(), nullable=True),
         sa.Column('application_id', sa.Integer(), nullable=True),
         sa.Column('sbom_id', sa.String(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['application_id'], ['applications.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
@@ -50,16 +50,16 @@ def upgrade() -> None:
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('cvss_score', sa.Float(), nullable=True),
         sa.Column('cvss_vector', sa.String(), nullable=True),
-        sa.Column('severity', sa.Enum('none', 'low', 'medium', 'high', 'critical', name='severityenum'), nullable=True),
+        sa.Column('severity', sa.String(), nullable=True),  # Changed from Enum to String for SQLite
         sa.Column('cwe_id', sa.String(), nullable=True),
-        sa.Column('published_date', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('modified_date', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('published_date', sa.DateTime(), nullable=True),
+        sa.Column('modified_date', sa.DateTime(), nullable=True),
         sa.Column('exploit_available', sa.Boolean(), nullable=True),
         sa.Column('patch_available', sa.Boolean(), nullable=True),
         sa.Column('references', sa.Text(), nullable=True),
         sa.Column('nvd_url', sa.String(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_cves_id'), 'cves', ['id'], unique=False)
@@ -70,7 +70,7 @@ def upgrade() -> None:
         'component_cve',
         sa.Column('component_id', sa.Integer(), nullable=False),
         sa.Column('cve_id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
         sa.ForeignKeyConstraint(['component_id'], ['components.id'], ),
         sa.ForeignKeyConstraint(['cve_id'], ['cves.id'], ),
         sa.PrimaryKeyConstraint('component_id', 'cve_id')

@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
-from app.models.cve import SeverityEnum
 
 
 class CVEBase(BaseModel):
@@ -9,7 +8,7 @@ class CVEBase(BaseModel):
     description: Optional[str] = None
     cvss_score: Optional[float] = None
     cvss_vector: Optional[str] = None
-    severity: SeverityEnum = SeverityEnum.MEDIUM
+    severity: str = "medium"
     cwe_id: Optional[str] = None
     published_date: Optional[datetime] = None
     modified_date: Optional[datetime] = None
@@ -27,7 +26,7 @@ class CVEUpdate(BaseModel):
     description: Optional[str] = None
     cvss_score: Optional[float] = None
     cvss_vector: Optional[str] = None
-    severity: Optional[SeverityEnum] = None
+    severity: Optional[str] = None
     cwe_id: Optional[str] = None
     exploit_available: Optional[bool] = None
     patch_available: Optional[bool] = None
@@ -48,4 +47,4 @@ class CVESearch(BaseModel):
     cve_id: Optional[str] = None
     component_name: Optional[str] = None
     component_version: Optional[str] = None
-    severity: Optional[SeverityEnum] = None
+    severity: Optional[str] = None

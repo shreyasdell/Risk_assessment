@@ -20,3 +20,13 @@ htmlcov/
 *.db
 *.sqlite3
 alembic/versions/*.pyc
+
+# Frontend
+node_modules/
+dist/
+.nuxt/
+.cache/
+.vuepress/dist/
+*.log
+.env.local
+.env.*.local
