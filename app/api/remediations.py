@@ -1,102 +1,202 @@
 """
 Remediation API Router
-Track remediation status for CVEs.
+Endpoints for tracking vulnerability remediation.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime
 
 from app.core.database import get_db
-from app.auth.dependencies import get_current_active_user
-from app.models.user import User
-from app.models.remediation import Remediation
-from app.schemas.remediation import RemediationCreate, RemediationUpdate, RemediationResponse
+from app.auth.dependencies import get_current_user
+from app.services.remediation_service import remediation_service
 
 router = APIRouter(prefix="/remediations", tags=["Remediations"])
 
 
-@router.post("/", response_model=RemediationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", summary="Create remediation task")
 def create_remediation(
-    remediation: RemediationCreate,
+    application_id: int,
+    cve_id: int,
+    component_id: Optional[int] = None,
+    priority: str = "High",
+    assigned_to: Optional[str] = None,
+    due_date: Optional[str] = None,
+    recommended_action: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user=Depends(get_current_user)
 ):
-    """Create a new remediation record."""
-    db_remediation = Remediation(**remediation.model_dump())
-    db.add(db_remediation)
-    db.commit()
-    db.refresh(db_remediation)
-    return db_remediation
+    """
+    Create a new remediation task to track fixing a CVE.
+
+    Priority: Critical, High, Medium, Low
+    """
+    parsed_due = None
+    if due_date:
+        try:
+            parsed_due = datetime.fromisoformat(due_date)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid date format. Use ISO format."
+            )
+
+    return remediation_service.create_remediation(
+        db=db,
+        application_id=application_id,
+        cve_id=cve_id,
+        component_id=component_id,
+        priority=priority,
+        assigned_to=assigned_to,
+        due_date=parsed_due,
+        recommended_action=recommended_action
+    )
 
 
-@router.get("/", response_model=list[RemediationResponse])
+@router.get("/", summary="List all remediations")
 def list_remediations(
     application_id: Optional[int] = None,
-    cve_id: Optional[int] = None,
     status: Optional[str] = None,
+    priority: Optional[str] = None,
+    assigned_to: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user=Depends(get_current_user)
 ):
     """List remediations with optional filters."""
-    query = db.query(Remediation)
-    
-    if application_id:
-        query = query.filter(Remediation.application_id == application_id)
-    if cve_id:
-        query = query.filter(Remediation.cve_id == cve_id)
-    if status:
-        query = query.filter(Remediation.status == status)
-    
-    return query.order_by(Remediation.created_at.desc()).offset(skip).limit(limit).all()
+    return remediation_service.list_remediations(
+        db=db,
+        application_id=application_id,
+        status=status,
+        priority=priority,
+        assigned_to=assigned_to,
+        skip=skip,
+        limit=limit
+    )
 
 
-@router.get("/{remediation_id}", response_model=RemediationResponse)
+@router.get(
+    "/{remediation_id}",
+    summary="Get remediation details"
+)
 def get_remediation(
     remediation_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user=Depends(get_current_user)
 ):
-    """Get a specific remediation."""
-    remediation = db.query(Remediation).filter(Remediation.id == remediation_id).first()
-    if not remediation:
-        raise HTTPException(status_code=404, detail="Remediation not found")
-    return remediation
+    """Get a single remediation by ID."""
+    return remediation_service.get_remediation(db, remediation_id)
 
 
-@router.put("/{remediation_id}", response_model=RemediationResponse)
+@router.put(
+    "/{remediation_id}",
+    summary="Update remediation"
+)
 def update_remediation(
     remediation_id: int,
-    remediation: RemediationUpdate,
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    due_date: Optional[str] = None,
+    resolution_notes: Optional[str] = None,
+    recommended_action: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user=Depends(get_current_user)
 ):
-    """Update a remediation."""
-    db_remediation = db.query(Remediation).filter(Remediation.id == remediation_id).first()
-    if not db_remediation:
-        raise HTTPException(status_code=404, detail="Remediation not found")
-    
-    for key, value in remediation.model_dump(exclude_unset=True).items():
-        setattr(db_remediation, key, value)
-    
-    db.commit()
-    db.refresh(db_remediation)
-    return db_remediation
+    """Update any field on a remediation."""
+    kwargs = {}
+    if status:
+        kwargs["status"] = status
+    if priority:
+        kwargs["priority"] = priority
+    if assigned_to:
+        kwargs["assigned_to"] = assigned_to
+    if resolution_notes:
+        kwargs["resolution_notes"] = resolution_notes
+    if recommended_action:
+        kwargs["recommended_action"] = recommended_action
+    if due_date:
+        try:
+            kwargs["due_date"] = datetime.fromisoformat(due_date)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid date format"
+            )
+
+    return remediation_service.update_remediation(
+        db=db,
+        remediation_id=remediation_id,
+        **kwargs
+    )
 
 
-@router.delete("/{remediation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.patch(
+    "/{remediation_id}/status",
+    summary="Update remediation status"
+)
+def update_status(
+    remediation_id: int,
+    new_status: str,
+    resolution_notes: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Quick status update.
+
+    Valid statuses:
+    - Open
+    - In Progress
+    - Mitigated
+    - Resolved
+    - Risk Accepted
+    - False Positive
+    """
+    return remediation_service.update_status(
+        db=db,
+        remediation_id=remediation_id,
+        new_status=new_status,
+        resolution_notes=resolution_notes
+    )
+
+
+@router.delete(
+    "/{remediation_id}",
+    summary="Delete remediation"
+)
 def delete_remediation(
     remediation_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user=Depends(get_current_user)
 ):
-    """Delete a remediation."""
-    db_remediation = db.query(Remediation).filter(Remediation.id == remediation_id).first()
-    if not db_remediation:
-        raise HTTPException(status_code=404, detail="Remediation not found")
-    
-    db.delete(db_remediation)
-    db.commit()
-    return None
+    """Delete a remediation record."""
+    remediation_service.delete_remediation(db, remediation_id)
+    return {"message": "Remediation deleted"}
+
+
+@router.get(
+    "/overdue/list",
+    summary="Get overdue remediations"
+)
+def get_overdue(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """Get all remediations past their due date."""
+    return remediation_service.get_overdue(db)
+
+
+@router.get(
+    "/stats/summary",
+    summary="Get remediation statistics"
+)
+def get_stats(
+    application_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """Get aggregated remediation stats."""
+    return remediation_service.get_stats(db, application_id)
