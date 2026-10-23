@@ -8,9 +8,9 @@ class RateLimiter:
     def __init__(self):
         self.requests: Dict[str, list] = defaultdict(list)
         self.rate_limits = {
-            'default': 100,  # 100 requests per minute
-            'auth': 5,       # 5 requests per minute for auth endpoints
-            'upload': 10,    # 10 requests per minute for uploads
+            'default': 200,  # 200 requests per minute (increased for development)
+            'auth': 20,      # 20 requests per minute for auth endpoints (increased)
+            'upload': 20,    # 20 requests per minute for uploads (increased)
         }
 
     def is_allowed(self, key: str, endpoint_type: str = 'default') -> bool:
@@ -31,6 +31,11 @@ rate_limiter = RateLimiter()
 
 
 async def rate_limit_middleware(request: Request, call_next):
+    # Skip OPTIONS requests (CORS preflight)
+    if request.method == 'OPTIONS':
+        response = await call_next(request)
+        return response
+    
     client_ip = request.client.host if request.client else "unknown"
     path = request.url.path
     
