@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
+import SearchBar from './SearchBar';
 
 function Header() {
   const { user, logout } = useAuth();
@@ -58,62 +59,7 @@ function Header() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-        <div style={{
-          flex: 1,
-          maxWidth: '320px',
-          position: 'relative'
-        }}>
-          <input
-            type="text"
-            placeholder="Search applications, vendors, CVEs..."
-            style={{
-              width: '100%',
-              padding: '8px 12px 8px 36px',
-              fontSize: '13px',
-              border: '1px solid #E0E0E0',
-              borderRadius: '6px',
-              backgroundColor: '#F5F7FA',
-              color: '#1A1A1A',
-              transition: 'all 100ms ease-in-out'
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = '#0076CE';
-              e.target.style.backgroundColor = '#FFFFFF';
-              e.target.style.boxShadow = '0 0 0 3px rgba(0, 118, 206, 0.1)';
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#E0E0E0';
-              e.target.style.backgroundColor = '#F5F7FA';
-              e.target.style.boxShadow = 'none';
-            }}
-          />
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            style={{
-              position: 'absolute',
-              left: '12px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: '#8A8A8A',
-              pointerEvents: 'none'
-            }}
-          >
-            <path
-              d="M7 12C9.76142 12 12 9.76142 12 7C12 4.23858 9.76142 2 7 2C4.23858 2 2 4.23858 2 7C2 9.76142 4.23858 12 7 12Z"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <path
-              d="M11 11L14 14"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-        </div>
+        <SearchBar />
 
         <button style={{
           background: 'none',

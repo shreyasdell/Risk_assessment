@@ -67,7 +67,7 @@ function VendorsPage() {
           <h1 style={{ fontSize: '24px', fontWeight: 600, color: '#202020', margin: '0 0 8px 0' }}>Vendor Management</h1>
           <p style={{ fontSize: '14px', color: '#606060', margin: 0 }}>Manage third-party vendors and their risk profiles</p>
         </div>
-        <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>
+        <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 500, cursor: 'pointer', transition: 'all 100ms ease-in-out' }}>
           Add Vendor
         </button>
       </div>
