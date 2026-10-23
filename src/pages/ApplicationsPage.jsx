@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { fetchApplications, fetchVendors, createApplication, updateApplication, deleteApplication, calculateRiskScore, uploadSBOM } from '../api/client';
+import { fetchApplications, fetchVendors, createApplication, updateApplication, deleteApplication, calculateRiskScore, uploadSBOM, fetchRiskScore } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 function ApplicationsPage() {
   const [apps, setApps] = useState([]);
+  const [riskScores, setRiskScores] = useState({});
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showSBOMModal, setShowSBOMModal] = useState(false);
+  const [showRiskModal, setShowRiskModal] = useState(false);
+  const [selectedRiskDetails, setSelectedRiskDetails] = useState(null);
   const [editingApp, setEditingApp] = useState(null);
   const [selectedAppForSBOM, setSelectedAppForSBOM] = useState(null);
   const [sbomFile, setSbomFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState({ name: '', description: '', owner: '', business_unit: '', criticality: 'medium', internet_facing: false, data_classification: 'internal', environment: 'development', vendor_id: '' });
 
-  useEffect(() => { loadApplications(); loadVendors(); }, []);
+  useEffect(() => { loadApplications(); loadVendors(); loadRiskScores(); }, []);
 
   const loadApplications = async () => {
     try { const response = await fetchApplications(); setApps(response.data); } catch (err) { console.error(err); } finally { setLoading(false); }
@@ -22,6 +25,19 @@ function ApplicationsPage() {
 
   const loadVendors = async () => {
     try { const response = await fetchVendors(); setVendors(response.data); } catch (err) { console.error(err); }
+  };
+
+  const loadRiskScores = async () => {
+    const scores = {};
+    for (const app of apps) {
+      try {
+        const response = await fetchRiskScore(app.id);
+        scores[app.id] = response.data;
+      } catch (err) {
+        // No risk score calculated yet
+      }
+    }
+    setRiskScores(scores);
   };
 
   const handleDelete = async (id) => {
@@ -56,7 +72,26 @@ function ApplicationsPage() {
   };
 
   const handleCalculateRisk = async (appId) => {
-    try { await calculateRiskScore(appId); alert('Risk score calculated'); loadApplications(); } catch (err) { console.error(err); alert('Failed'); }
+    try {
+      await calculateRiskScore(appId);
+      alert('Risk score calculated successfully');
+      loadApplications();
+      loadRiskScores();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to calculate risk score');
+    }
+  };
+
+  const handleViewRiskDetails = async (appId) => {
+    try {
+      const response = await fetchRiskScore(appId);
+      setSelectedRiskDetails(response.data);
+      setShowRiskModal(true);
+    } catch (err) {
+      console.error(err);
+      alert('No risk score found for this application. Calculate one first.');
+    }
   };
 
   const handleOpenSBOMUpload = (app) => {
@@ -124,30 +159,47 @@ function ApplicationsPage() {
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Name</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Owner</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Criticality</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Risk Score</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Environment</th>
               <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#606060' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {apps.length === 0 ? (
-              <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: '#606060' }}>No applications yet</td></tr>
+              <tr><td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#606060' }}>No applications yet</td></tr>
             ) : (
-              apps.map((app) => (
-                <tr key={app.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
-                  <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{app.name}</td>
-                  <td style={{ padding: '12px 16px', color: '#606060' }}>{app.owner || '—'}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', backgroundColor: app.criticality === 'critical' ? '#FDE8E8' : app.criticality === 'high' ? '#FFF4E5' : '#E6F4EA', color: app.criticality === 'critical' ? '#D13438' : app.criticality === 'high' ? '#F4B400' : '#107C10' }}>{app.criticality || '—'}</span>
-                  </td>
-                  <td style={{ padding: '12px 16px', color: '#606060' }}>{app.environment || '—'}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    <button onClick={() => handleOpenSBOMUpload(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '16px' }}>Upload SBOM</button>
-                    <button onClick={() => handleCalculateRisk(app.id)} style={{ background: 'none', border: 'none', color: '#107C10', cursor: 'pointer', fontSize: '13px', marginRight: '16px' }}>Calculate Risk</button>
-                    <button onClick={() => handleEdit(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '16px' }}>Edit</button>
-                    <button onClick={() => handleDelete(app.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
-                  </td>
-                </tr>
-              ))
+              apps.map((app) => {
+                const riskScore = riskScores[app.id];
+                return (
+                  <tr key={app.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                    <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{app.name}</td>
+                    <td style={{ padding: '12px 16px', color: '#606060' }}>{app.owner || '—'}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', backgroundColor: app.criticality === 'critical' ? '#FDE8E8' : app.criticality === 'high' ? '#FFF4E5' : '#E6F4EA', color: app.criticality === 'critical' ? '#D13438' : app.criticality === 'high' ? '#F4B400' : '#107C10' }}>{app.criticality || '—'}</span>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {riskScore ? (
+                        <div>
+                          <span style={{ fontWeight: 600, color: '#202020' }}>{riskScore.overall_score?.toFixed(1) || 'N/A'}</span>
+                          <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 500, textTransform: 'uppercase', backgroundColor: riskScore.rating === 'Critical' ? '#FDE8E8' : riskScore.rating === 'Very High' ? '#FECACA' : riskScore.rating === 'High' ? '#FFF4E5' : riskScore.rating === 'Moderate' ? '#FEF9C3' : '#DCFCE7', color: riskScore.rating === 'Critical' ? '#D13438' : riskScore.rating === 'Very High' ? '#DC2626' : riskScore.rating === 'High' ? '#F4B400' : riskScore.rating === 'Moderate' ? '#EAB308' : '#22C55E' }}>{riskScore.rating || 'Unknown'}</span>
+                        </div>
+                      ) : (
+                        <span style={{ color: '#8A8A8A', fontStyle: 'italic' }}>Not calculated</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px 16px', color: '#606060' }}>{app.environment || '—'}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <button onClick={() => handleOpenSBOMUpload(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Upload SBOM</button>
+                      <button onClick={() => handleCalculateRisk(app.id)} style={{ background: 'none', border: 'none', color: '#107C10', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Calculate Risk</button>
+                      {riskScore && (
+                        <button onClick={() => handleViewRiskDetails(app.id)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>View Details</button>
+                      )}
+                      <button onClick={() => handleEdit(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Edit</button>
+                      <button onClick={() => handleDelete(app.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -266,6 +318,83 @@ function ApplicationsPage() {
                 >
                   {uploading ? 'Uploading...' : 'Upload'}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRiskModal && selectedRiskDetails && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', width: '600px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.12)' }}>
+            <div style={{ padding: '24px', borderBottom: '1px solid #E5E5E5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', margin: 0 }}>Risk Score Details</h2>
+              <button onClick={() => setShowRiskModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#606060' }}>&times;</button>
+            </div>
+            <div style={{ padding: '24px' }}>
+              <div style={{ marginBottom: '24px', textAlign: 'center', padding: '20px', backgroundColor: '#F7F8FA', borderRadius: '8px' }}>
+                <div style={{ fontSize: '48px', fontWeight: 700, color: selectedRiskDetails.rating === 'Critical' ? '#D13438' : selectedRiskDetails.rating === 'Very High' ? '#DC2626' : selectedRiskDetails.rating === 'High' ? '#F4B400' : selectedRiskDetails.rating === 'Moderate' ? '#EAB308' : '#22C55E' }}>
+                  {selectedRiskDetails.overall_score?.toFixed(1) || 'N/A'}
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: '#606060', marginTop: '8px', textTransform: 'uppercase' }}>
+                  {selectedRiskDetails.rating || 'Unknown'}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>Risk Breakdown</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ padding: '12px', backgroundColor: '#F7F8FA', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '12px', color: '#606060', marginBottom: '4px' }}>CVSS Weighted</div>
+                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#202020' }}>{selectedRiskDetails.cvss_weighted?.toFixed(2) || 'N/A'}</div>
+                  </div>
+                  <div style={{ padding: '12px', backgroundColor: '#F7F8FA', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '12px', color: '#606060', marginBottom: '4px' }}>Criticality</div>
+                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#202020' }}>{selectedRiskDetails.criticality_weighted?.toFixed(2) || 'N/A'}</div>
+                  </div>
+                  <div style={{ padding: '12px', backgroundColor: '#F7F8FA', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '12px', color: '#606060', marginBottom: '4px' }}>Exposure</div>
+                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#202020' }}>{selectedRiskDetails.exposure_weighted?.toFixed(2) || 'N/A'}</div>
+                  </div>
+                  <div style={{ padding: '12px', backgroundColor: '#F7F8FA', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '12px', color: '#606060', marginBottom: '4px' }}>Exploit Risk</div>
+                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#202020' }}>{selectedRiskDetails.exploit_weighted?.toFixed(2) || 'N/A'}</div>
+                  </div>
+                  <div style={{ padding: '12px', backgroundColor: '#F7F8FA', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '12px', color: '#606060', marginBottom: '4px' }}>Patch Delay</div>
+                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#202020' }}>{selectedRiskDetails.patch_delay_weighted?.toFixed(2) || 'N/A'}</div>
+                  </div>
+                  <div style={{ padding: '12px', backgroundColor: '#F7F8FA', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '12px', color: '#606060', marginBottom: '4px' }}>Vendor Risk</div>
+                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#202020' }}>{selectedRiskDetails.vendor_risk_weighted?.toFixed(2) || 'N/A'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>CVE Summary</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                  <div style={{ padding: '12px', backgroundColor: '#F7F8FA', borderRadius: '6px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 600, color: '#202020' }}>{selectedRiskDetails.total_cves_found || 0}</div>
+                    <div style={{ fontSize: '11px', color: '#606060', marginTop: '4px' }}>Total CVEs</div>
+                  </div>
+                  <div style={{ padding: '12px', backgroundColor: '#FDE8E8', borderRadius: '6px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 600, color: '#D13438' }}>{selectedRiskDetails.critical_cves_count || 0}</div>
+                    <div style={{ fontSize: '11px', color: '#606060', marginTop: '4px' }}>Critical</div>
+                  </div>
+                  <div style={{ padding: '12px', backgroundColor: '#FECACA', borderRadius: '6px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 600, color: '#DC2626' }}>{selectedRiskDetails.high_cves_count || 0}</div>
+                    <div style={{ fontSize: '11px', color: '#606060', marginTop: '4px' }}>High</div>
+                  </div>
+                  <div style={{ padding: '12px', backgroundColor: '#FEF9C3', borderRadius: '6px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 600, color: '#EAB308' }}>{selectedRiskDetails.medium_cves_count || 0}</div>
+                    <div style={{ fontSize: '11px', color: '#606060', marginTop: '4px' }}>Medium</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #E5E5E5' }}>
+                <button onClick={() => setShowRiskModal(false)} style={{ background: '#FFFFFF', color: '#606060', border: '1px solid #D9D9D9', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}>Close</button>
               </div>
             </div>
           </div>
