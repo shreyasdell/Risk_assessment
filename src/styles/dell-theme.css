@@ -1,77 +1,104 @@
 /* Dell Enterprise Theme - Third Party Risk Assessment Tool */
 
 :root {
-  /* Primary Colors */
+  /* Dell Brand Colors - Official Dell Design System */
   --dell-blue: #0076CE;
-  --dell-blue-secondary: #005999;
-  --dell-blue-hover: #005a8c;
+  --dell-blue-dark: #005A8C;
+  --dell-blue-darker: #002A58;
+  --dell-blue-light: #0672CB;
+  --dell-blue-lighter: #E5F3FF;
   
   /* Background Colors */
-  --page-background: #F7F8FA;
+  --page-background: #F5F7FA;
   --card-background: #FFFFFF;
   --header-background: #FFFFFF;
   --sidebar-background: #FFFFFF;
+  --sidebar-hover: #F8F9FA;
   
   /* Border Colors */
-  --border-color: #D9D9D9;
-  --border-light: #E5E5E5;
+  --border-color: #E0E0E0;
+  --border-light: #F0F0F0;
+  --border-focus: #0076CE;
   
   /* Text Colors */
-  --text-primary: #202020;
-  --text-secondary: #606060;
-  --text-tertiary: #909090;
+  --text-primary: #1A1A1A;
+  --text-secondary: #5A5A5A;
+  --text-tertiary: #8A8A8A;
   --text-on-primary: #FFFFFF;
+  --text-on-dark: #FFFFFF;
   
   /* Status Colors */
   --success: #107C10;
   --success-light: #E6F4EA;
+  --success-dark: #0B5C0B;
   --warning: #F4B400;
-  --warning-light: #FFF4E5;
+  --warning-light: #FFF8E1;
+  --warning-dark: #C79100;
   --critical: #D13438;
   --critical-light: #FDE8E8;
+  --critical-dark: #A4262A;
   --info: #0076CE;
   --info-light: #E5F3FF;
+  --info-dark: #005A8C;
   
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 32px;
-  --spacing-xxl: 48px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-xxl: 32px;
+  --spacing-xxxl: 48px;
   
   /* Typography */
-  --font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-size-xs: 12px;
-  --font-size-sm: 13px;
-  --font-size-base: 14px;
-  --font-size-lg: 16px;
-  --font-size-xl: 18px;
-  --font-size-xxl: 24px;
+  --font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-lg: 14px;
+  --font-size-xl: 16px;
+  --font-size-xxl: 20px;
+  --font-size-xxxl: 24px;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
   
+  /* Line Heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  
   /* Border Radius */
-  --border-radius-sm: 4px;
-  --border-radius-md: 8px;
-  --border-radius-lg: 12px;
+  --border-radius-sm: 3px;
+  --border-radius-md: 6px;
+  --border-radius-lg: 8px;
   
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.12);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.15);
   
   /* Transitions */
-  --transition-fast: 150ms ease-in-out;
-  --transition-base: 200ms ease-in-out;
-  --transition-slow: 300ms ease-in-out;
+  --transition-fast: 100ms ease-in-out;
+  --transition-base: 150ms ease-in-out;
+  --transition-slow: 200ms ease-in-out;
   
   /* Layout */
-  --header-height: 60px;
-  --sidebar-width: 240px;
-  --sidebar-collapsed-width: 72px;
+  --header-height: 56px;
+  --sidebar-width: 256px;
+  --sidebar-collapsed-width: 64px;
+  
+  /* Z-Index */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
 }
 
 * {

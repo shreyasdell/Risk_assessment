@@ -147,16 +147,16 @@ function Sidebar({ collapsed, onToggle }) {
 
   return (
     <aside style={{
-      width: collapsed ? '72px' : '240px',
-      height: 'calc(100vh - 60px)',
+      width: collapsed ? '64px' : '256px',
+      height: 'calc(100vh - 56px)',
       backgroundColor: '#FFFFFF',
-      borderRight: '1px solid #D9D9D9',
+      borderRight: '1px solid #E0E0E0',
       position: 'fixed',
-      top: '60px',
+      top: '56px',
       left: 0,
       overflowY: 'auto',
-      transition: 'width 200ms ease-in-out',
-      zIndex: 900
+      transition: 'width 150ms ease-in-out',
+      zIndex: 1020
     }}>
       <button
         onClick={onToggle}

@@ -6,15 +6,15 @@ function AppShell({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#F7F8FA' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#F5F7FA' }}>
       <Header />
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
       <main style={{
-        marginLeft: sidebarCollapsed ? '72px' : '240px',
-        marginTop: '60px',
-        minHeight: 'calc(100vh - 60px)',
-        padding: '32px',
-        transition: 'margin-left 200ms ease-in-out'
+        marginLeft: sidebarCollapsed ? '64px' : '256px',
+        marginTop: '56px',
+        minHeight: 'calc(100vh - 56px)',
+        padding: '24px',
+        transition: 'margin-left 150ms ease-in-out'
       }}>
         {children}
       </main>
