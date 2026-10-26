@@ -19,9 +19,12 @@ class ComponentBase(BaseModel):
 
     @field_validator('name', 'version')
     @classmethod
-    def validate_alphanumeric(cls, v):
-        if not re.match(r'^[a-zA-Z0-9\s\-_.]+$', v):
-            raise ValueError('Must not contain special characters')
+    def validate_component_fields(cls, v):
+        # More lenient validation for SBOM compatibility
+        if not v or not v.strip():
+            raise ValueError('Cannot be empty')
+        # Remove potentially dangerous characters but allow common SBOM chars
+        v = re.sub(r'[<>\"\'\\]', '', v)
         return v.strip()
 
 
@@ -42,10 +45,13 @@ class ComponentUpdate(BaseModel):
 
     @field_validator('name', 'version')
     @classmethod
-    def validate_alphanumeric(cls, v):
-        if v is not None and not re.match(r'^[a-zA-Z0-9\s\-_.]+$', v):
-            raise ValueError('Must not contain special characters')
-        return v.strip() if v else v
+    def validate_component_fields(cls, v):
+        if v is not None:
+            if not v or not v.strip():
+                raise ValueError('Cannot be empty')
+            v = re.sub(r'[<>\"\'\\]', '', v)
+            return v.strip()
+        return v
 
 
 class ComponentResponse(ComponentBase):
