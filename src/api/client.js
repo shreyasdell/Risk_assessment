@@ -47,8 +47,17 @@ export const getCurrentUser = () =>
 export const fetchDashboard = (params = {}) =>
   apiClient.get('/dashboard', { params });
 
-export const fetchVendors = () =>
-  apiClient.get('/vendors');
+export const fetchVendors = (params = {}) =>
+  apiClient.get('/vendors', { params });
+
+export const fetchVendorStats = () =>
+  apiClient.get('/vendors/stats');
+
+export const fetchVendorApplications = (vendorId) =>
+  apiClient.get(`/vendors/${vendorId}/applications`);
+
+export const calculateVendorRisk = (vendorId) =>
+  apiClient.post(`/vendors/${vendorId}/calculate-risk`);
 
 export const createVendor = (data) =>
   apiClient.post('/vendors', data);

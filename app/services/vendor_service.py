@@ -12,8 +12,11 @@ def get_vendor_by_name(db: Session, name: str) -> Optional[Vendor]:
     return db.query(Vendor).filter(Vendor.name == name).first()
 
 
-def get_vendors(db: Session, skip: int = 0, limit: int = 100) -> List[Vendor]:
-    return db.query(Vendor).offset(skip).limit(limit).all()
+def get_vendors(db: Session, skip: int = 0, limit: int = 100, tier: str = None) -> List[Vendor]:
+    query = db.query(Vendor)
+    if tier:
+        query = query.filter(Vendor.tier == tier)
+    return query.offset(skip).limit(limit).all()
 
 
 def create_vendor(db: Session, vendor: VendorCreate) -> Vendor:

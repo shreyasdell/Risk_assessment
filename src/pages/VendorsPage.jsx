@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { fetchVendors, createVendor, updateVendor, deleteVendor } from '../api/client';
+import { fetchVendors, createVendor, updateVendor, deleteVendor, calculateVendorRisk, fetchVendorApplications } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 function VendorsPage() {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showAppsModal, setShowAppsModal] = useState(false);
+  const [selectedVendorApps, setSelectedVendorApps] = useState(null);
   const [editingVendor, setEditingVendor] = useState(null);
-  const [formData, setFormData] = useState({ name: '', country: '', business_owner: '', contact: '', service_type: '', hosting_model: '' });
+  const [formData, setFormData] = useState({ name: '', country: '', business_owner: '', contact: '', service_type: '', hosting_model: '', tier: '', compliance_status: '' });
 
   useEffect(() => { loadVendors(); }, []);
 
@@ -35,13 +37,13 @@ function VendorsPage() {
 
   const handleCreate = () => {
     setEditingVendor(null);
-    setFormData({ name: '', country: '', business_owner: '', contact: '', service_type: '', hosting_model: '' });
+    setFormData({ name: '', country: '', business_owner: '', contact: '', service_type: '', hosting_model: '', tier: '', compliance_status: '' });
     setShowModal(true);
   };
 
   const handleEdit = (vendor) => {
     setEditingVendor(vendor);
-    setFormData({ name: vendor.name, country: vendor.country || '', business_owner: vendor.business_owner || '', contact: vendor.contact || '', service_type: vendor.service_type || '', hosting_model: vendor.hosting_model || '' });
+    setFormData({ name: vendor.name, country: vendor.country || '', business_owner: vendor.business_owner || '', contact: vendor.contact || '', service_type: vendor.service_type || '', hosting_model: vendor.hosting_model || '', tier: vendor.tier || '', compliance_status: vendor.compliance_status || '' });
     setShowModal(true);
   };
 
@@ -55,6 +57,28 @@ function VendorsPage() {
     } catch (err) {
       console.error('Error saving vendor:', err);
       alert('Failed to save vendor');
+    }
+  };
+
+  const handleCalculateRisk = async (vendorId) => {
+    try {
+      await calculateVendorRisk(vendorId);
+      alert('Vendor risk calculated successfully');
+      loadVendors();
+    } catch (err) {
+      console.error('Error calculating risk:', err);
+      alert('Failed to calculate vendor risk');
+    }
+  };
+
+  const handleViewApplications = async (vendorId) => {
+    try {
+      const response = await fetchVendorApplications(vendorId);
+      setSelectedVendorApps(response.data);
+      setShowAppsModal(true);
+    } catch (err) {
+      console.error('Error loading vendor applications:', err);
+      alert('Failed to load vendor applications');
     }
   };
 
@@ -78,23 +102,66 @@ function VendorsPage() {
             <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Name</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Country</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Business Owner</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Service Type</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Tier</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Risk Score</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Compliance</th>
               <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#606060' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {vendors.length === 0 ? (
-              <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: '#606060' }}>No vendors yet</td></tr>
+              <tr><td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#606060' }}>No vendors yet</td></tr>
             ) : (
               vendors.map((vendor) => (
                 <tr key={vendor.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
                   <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{vendor.name}</td>
                   <td style={{ padding: '12px 16px', color: '#606060' }}>{vendor.country || '—'}</td>
-                  <td style={{ padding: '12px 16px', color: '#606060' }}>{vendor.business_owner || '—'}</td>
-                  <td style={{ padding: '12px 16px', color: '#606060' }}>{vendor.service_type || '—'}</td>
+                  <td style={{ padding: '12px 16px' }}>
+                    {vendor.tier ? (
+                      <span style={{ 
+                        padding: '2px 8px', 
+                        borderRadius: '4px', 
+                        fontSize: '12px', 
+                        fontWeight: 500, 
+                        textTransform: 'uppercase',
+                        backgroundColor: vendor.tier === 'Critical' ? '#FDE8E8' : vendor.tier === 'High' ? '#FECACA' : vendor.tier === 'Medium' ? '#FEF9C3' : '#DCFCE7',
+                        color: vendor.tier === 'Critical' ? '#D13438' : vendor.tier === 'High' ? '#DC2626' : vendor.tier === 'Medium' ? '#EAB308' : '#22C55E'
+                      }}>
+                        {vendor.tier}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#8A8A8A', fontStyle: 'italic' }}>Unclassified</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px 16px' }}>
+                    {vendor.risk_score !== null ? (
+                      <span style={{ fontWeight: 600, color: vendor.risk_score >= 6 ? '#D13438' : vendor.risk_score >= 4 ? '#F4B400' : '#202020' }}>
+                        {vendor.risk_score.toFixed(1)}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#8A8A8A', fontStyle: 'italic' }}>Not calculated</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px 16px' }}>
+                    {vendor.compliance_status ? (
+                      <span style={{ 
+                        padding: '2px 8px', 
+                        borderRadius: '4px', 
+                        fontSize: '12px', 
+                        fontWeight: 500,
+                        backgroundColor: vendor.compliance_status === 'Compliant' ? '#E6F4EA' : vendor.compliance_status === 'Non-Compliant' ? '#FDE8E8' : '#FFF4E5',
+                        color: vendor.compliance_status === 'Compliant' ? '#107C10' : vendor.compliance_status === 'Non-Compliant' ? '#D13438' : '#F4B400'
+                      }}>
+                        {vendor.compliance_status}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#8A8A8A', fontStyle: 'italic' }}>Unknown</span>
+                    )}
+                  </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    <button onClick={() => handleEdit(vendor)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '16px' }}>Edit</button>
+                    <button onClick={() => handleViewApplications(vendor.id)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>View Apps</button>
+                    <button onClick={() => handleCalculateRisk(vendor.id)} style={{ background: 'none', border: 'none', color: '#107C10', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Calculate Risk</button>
+                    <button onClick={() => handleEdit(vendor)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Edit</button>
                     <button onClick={() => handleDelete(vendor.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
                   </td>
                 </tr>
@@ -106,7 +173,7 @@ function VendorsPage() {
 
       {showModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', width: '500px', maxWidth: '90%', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.12)' }}>
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', width: '500px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.12)' }}>
             <div style={{ padding: '24px', borderBottom: '1px solid #E5E5E5' }}>
               <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', margin: 0 }}>{editingVendor ? 'Edit Vendor' : 'Add Vendor'}</h2>
             </div>
@@ -135,11 +202,83 @@ function VendorsPage() {
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: 500, color: '#606060' }}>Hosting Model</label>
                 <input type="text" value={formData.hosting_model} onChange={(e) => setFormData({ ...formData, hosting_model: e.target.value })} style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }} />
               </div>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: 500, color: '#606060' }}>Tier</label>
+                <select value={formData.tier} onChange={(e) => setFormData({ ...formData, tier: e.target.value })} style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }}>
+                  <option value="">Select Tier</option>
+                  <option value="Critical">Critical</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: 500, color: '#606060' }}>Compliance Status</label>
+                <select value={formData.compliance_status} onChange={(e) => setFormData({ ...formData, compliance_status: e.target.value })} style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }}>
+                  <option value="">Select Status</option>
+                  <option value="Compliant">Compliant</option>
+                  <option value="Non-Compliant">Non-Compliant</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Unknown">Unknown</option>
+                </select>
+              </div>
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #E5E5E5' }}>
                 <button type="button" onClick={() => setShowModal(false)} style={{ background: '#FFFFFF', color: '#606060', border: '1px solid #D9D9D9', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}>Cancel</button>
                 <button type="submit" style={{ background: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}>{editingVendor ? 'Update' : 'Create'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showAppsModal && selectedVendorApps && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', width: '600px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.12)' }}>
+            <div style={{ padding: '24px', borderBottom: '1px solid #E5E5E5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', margin: 0 }}>Vendor Applications</h2>
+              <button onClick={() => setShowAppsModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#606060' }}>&times;</button>
+            </div>
+            <div style={{ padding: '24px' }}>
+              {selectedVendorApps.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#606060' }}>No applications for this vendor</p>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Application</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Criticality</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Environment</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Internet Facing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedVendorApps.map((app) => (
+                      <tr key={app.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                        <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{app.name}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{ 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '12px', 
+                            fontWeight: 500, 
+                            textTransform: 'uppercase',
+                            backgroundColor: app.criticality === 'critical' ? '#FDE8E8' : app.criticality === 'high' ? '#FFF4E5' : '#E6F4EA',
+                            color: app.criticality === 'critical' ? '#D13438' : app.criticality === 'high' ? '#F4B400' : '#107C10'
+                          }}>
+                            {app.criticality || '—'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 16px', color: '#606060' }}>{app.environment || '—'}</td>
+                        <td style={{ padding: '12px 16px', color: '#606060' }}>{app.internet_facing ? 'Yes' : 'No'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #E5E5E5' }}>
+                <button onClick={() => setShowAppsModal(false)} style={{ background: '#FFFFFF', color: '#606060', border: '1px solid #D9D9D9', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}>Close</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
