@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchComponents, fetchApplications, createComponent, updateComponent, deleteComponent, syncCVEs, fetchLinkedCVEs } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useAuth } from '../context/AuthContext';
 
 function ComponentsPage() {
   const [components, setComponents] = useState([]);
@@ -13,6 +14,7 @@ function ComponentsPage() {
   const [selectedComponentCVEs, setSelectedComponentCVEs] = useState(null);
   const [selectedApplication, setSelectedApplication] = useState('');
   const [formData, setFormData] = useState({ name: '', version: '', component_type: 'library', purl: '', supplier: '', description: '', license: '', application_id: '' });
+  const { canWrite, canDelete } = useAuth();
 
   useEffect(() => { loadComponents(); loadApplications(); }, []);
 
@@ -71,7 +73,9 @@ function ComponentsPage() {
               <option key={app.id} value={app.id}>{app.name}</option>
             ))}
           </select>
-          <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Add Component</button>
+          {canWrite && (
+            <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Add Component</button>
+          )}
         </div>
       </div>
 
@@ -100,10 +104,16 @@ function ComponentsPage() {
                   )}
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <button onClick={() => handleSyncCVEs(component.id)} disabled={syncingCVEs[component.id]} style={{ background: syncingCVEs[component.id] ? '#64748B' : '#107C10', color: '#FFFFFF', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: syncingCVEs[component.id] ? 'not-allowed' : 'pointer', fontSize: '12px', marginRight: '8px' }}>{syncingCVEs[component.id] ? 'Syncing...' : 'Sync CVEs'}</button>
+                  {canWrite && (
+                    <button onClick={() => handleSyncCVEs(component.id)} disabled={syncingCVEs[component.id]} style={{ background: syncingCVEs[component.id] ? '#64748B' : '#107C10', color: '#FFFFFF', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: syncingCVEs[component.id] ? 'not-allowed' : 'pointer', fontSize: '12px', marginRight: '8px' }}>{syncingCVEs[component.id] ? 'Syncing...' : 'Sync CVEs'}</button>
+                  )}
                   <button onClick={() => handleViewCVEs(component.id)} style={{ background: 'none', border: 'none', color: '#F4B400', cursor: 'pointer', fontSize: '13px', marginRight: '8px' }}>View CVEs</button>
-                  <button onClick={() => handleEdit(component)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '8px' }}>Edit</button>
-                  <button onClick={() => handleDelete(component.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
+                  {canWrite && (
+                    <button onClick={() => handleEdit(component)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '8px' }}>Edit</button>
+                  )}
+                  {canDelete && (
+                    <button onClick={() => handleDelete(component.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
+                  )}
                 </td>
               </tr>
             ))}

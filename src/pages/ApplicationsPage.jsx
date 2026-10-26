@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchApplications, fetchVendors, createApplication, updateApplication, deleteApplication, calculateRiskScore, uploadSBOM, fetchRiskScore } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useAuth } from '../context/AuthContext';
 
 function ApplicationsPage() {
   const [apps, setApps] = useState([]);
@@ -16,6 +17,7 @@ function ApplicationsPage() {
   const [sbomFile, setSbomFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState({ name: '', description: '', owner: '', business_unit: '', criticality: 'medium', internet_facing: false, data_classification: 'internal', environment: 'development', vendor_id: '' });
+  const { canWrite, canDelete } = useAuth();
 
   useEffect(() => { loadApplications(); loadVendors(); }, []);
 
@@ -151,9 +153,11 @@ function ApplicationsPage() {
           <h1 style={{ fontSize: '24px', fontWeight: 600, color: '#202020', margin: '0 0 8px 0' }}>Application Inventory</h1>
           <p style={{ fontSize: '14px', color: '#606060', margin: 0 }}>Manage applications and their risk assessments</p>
         </div>
-        <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>
-          Add Application
-        </button>
+        {canWrite && (
+          <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>
+            Add Application
+          </button>
+        )}
       </div>
 
       <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
@@ -193,13 +197,21 @@ function ApplicationsPage() {
                     </td>
                     <td style={{ padding: '12px 16px', color: '#606060' }}>{app.environment || '—'}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <button onClick={() => handleOpenSBOMUpload(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Upload SBOM</button>
-                      <button onClick={() => handleCalculateRisk(app.id)} style={{ background: 'none', border: 'none', color: '#107C10', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Calculate Risk</button>
+                      {canWrite && (
+                        <button onClick={() => handleOpenSBOMUpload(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Upload SBOM</button>
+                      )}
+                      {canWrite && (
+                        <button onClick={() => handleCalculateRisk(app.id)} style={{ background: 'none', border: 'none', color: '#107C10', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Calculate Risk</button>
+                      )}
                       {riskScore && (
                         <button onClick={() => handleViewRiskDetails(app.id)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>View Details</button>
                       )}
-                      <button onClick={() => handleEdit(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Edit</button>
-                      <button onClick={() => handleDelete(app.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
+                      {canWrite && (
+                        <button onClick={() => handleEdit(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Edit</button>
+                      )}
+                      {canDelete && (
+                        <button onClick={() => handleDelete(app.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
+                      )}
                     </td>
                   </tr>
                 );

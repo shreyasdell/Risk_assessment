@@ -35,8 +35,30 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const hasRole = (role) => {
+    return user?.role === role;
+  };
+
+  const isAdmin = () => hasRole('admin');
+  const isAnalyst = () => hasRole('analyst') || isAdmin();
+  const isViewer = () => hasRole('viewer') || isAnalyst();
+  const canWrite = () => isAdmin() || hasRole('analyst');
+  const canDelete = () => isAdmin();
+  const canManageUsers = () => isAdmin();
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      loading,
+      isAdmin,
+      isAnalyst,
+      isViewer,
+      canWrite,
+      canDelete,
+      canManageUsers
+    }}>
       {children}
     </AuthContext.Provider>
   );

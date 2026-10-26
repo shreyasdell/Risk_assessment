@@ -37,8 +37,8 @@ function Header() {
             src={dellLogo}
             alt="Dell Logo"
             style={{
-              width: '100%',
-              height: '100%',
+              width: '300%',
+              height: '300%',
               objectFit: 'contain'
             }}
           />
@@ -143,7 +143,7 @@ function Header() {
               {user?.username || 'User'}
             </span>
             <span style={{ fontSize: '11px', color: '#8A8A8A', lineHeight: '1.25' }}>
-              Administrator
+              {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Viewer'}
             </span>
           </div>
           <button

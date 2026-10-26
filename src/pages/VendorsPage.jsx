@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchVendors, createVendor, updateVendor, deleteVendor, calculateVendorRisk, fetchVendorApplications } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useAuth } from '../context/AuthContext';
 
 function VendorsPage() {
   const [vendors, setVendors] = useState([]);
@@ -10,6 +11,7 @@ function VendorsPage() {
   const [selectedVendorApps, setSelectedVendorApps] = useState(null);
   const [editingVendor, setEditingVendor] = useState(null);
   const [formData, setFormData] = useState({ name: '', country: '', business_owner: '', contact: '', service_type: '', hosting_model: '', tier: '', compliance_status: '' });
+  const { canWrite, canDelete } = useAuth();
 
   useEffect(() => { loadVendors(); }, []);
 
@@ -91,9 +93,11 @@ function VendorsPage() {
           <h1 style={{ fontSize: '24px', fontWeight: 600, color: '#202020', margin: '0 0 8px 0' }}>Vendor Management</h1>
           <p style={{ fontSize: '14px', color: '#606060', margin: 0 }}>Manage third-party vendors and their risk profiles</p>
         </div>
-        <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 500, cursor: 'pointer', transition: 'all 100ms ease-in-out' }}>
-          Add Vendor
-        </button>
+        {canWrite && (
+          <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 500, cursor: 'pointer', transition: 'all 100ms ease-in-out' }}>
+            Add Vendor
+          </button>
+        )}
       </div>
 
       <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
@@ -160,9 +164,15 @@ function VendorsPage() {
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                     <button onClick={() => handleViewApplications(vendor.id)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>View Apps</button>
-                    <button onClick={() => handleCalculateRisk(vendor.id)} style={{ background: 'none', border: 'none', color: '#107C10', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Calculate Risk</button>
-                    <button onClick={() => handleEdit(vendor)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Edit</button>
-                    <button onClick={() => handleDelete(vendor.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
+                    {canWrite && (
+                      <button onClick={() => handleCalculateRisk(vendor.id)} style={{ background: 'none', border: 'none', color: '#107C10', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Calculate Risk</button>
+                    )}
+                    {canWrite && (
+                      <button onClick={() => handleEdit(vendor)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Edit</button>
+                    )}
+                    {canDelete && (
+                      <button onClick={() => handleDelete(vendor.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
+                    )}
                   </td>
                 </tr>
               ))
