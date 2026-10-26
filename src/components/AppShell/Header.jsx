@@ -22,21 +22,15 @@ function Header() {
       boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{
-          width: '36px',
-          height: '36px',
-          backgroundColor: '#0076CE',
-          borderRadius: '6px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#FFFFFF',
-          fontWeight: 700,
-          fontSize: '16px',
-          letterSpacing: '0.5px'
-        }}>
-          D
-        </div>
+        <img
+          src="/assets/dell_logo.webp"
+          alt="Dell Logo"
+          style={{
+            width: '36px',
+            height: '36px',
+            objectFit: 'contain'
+          }}
+        />
         <div>
           <span style={{
             fontSize: '16px',

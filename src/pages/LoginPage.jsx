@@ -67,22 +67,16 @@ function LoginPage() {
           padding: '32px 32px 24px 32px',
           textAlign: 'center'
         }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            backgroundColor: '#FFFFFF',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 16px',
-            color: '#0076CE',
-            fontWeight: 700,
-            fontSize: '20px',
-            letterSpacing: '0.5px'
-          }}>
-            D
-          </div>
+          <img
+            src="/assets/dell_logo.webp"
+            alt="Dell Logo"
+            style={{
+              width: '80px',
+              height: 'auto',
+              margin: '0 auto 16px',
+              display: 'block'
+            }}
+          />
           <h1 style={{
             fontSize: '24px',
             fontWeight: 600,
