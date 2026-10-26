@@ -42,12 +42,16 @@ def process_sbom_upload(
     if not components:
         raise ValueError("No components found in SBOM")
     
-    # Store components in database
+    # Store components in database (duplicates will be skipped)
     created_components = create_components_bulk(db, components)
+    
+    skipped_count = len(components) - len(created_components)
     
     return {
         "sbom_id": sbom_id,
-        "components_count": len(created_components),
+        "total_components": len(components),
+        "created_components": len(created_components),
+        "skipped_components": skipped_count,
         "components": [comp.id for comp in created_components]
     }
 

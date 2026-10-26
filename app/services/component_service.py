@@ -36,12 +36,25 @@ def create_component(db: Session, component: ComponentCreate) -> Component:
 
 
 def create_components_bulk(db: Session, components: List[ComponentCreate]) -> List[Component]:
-    db_components = [Component(**comp.model_dump()) for comp in components]
-    db.add_all(db_components)
-    db.commit()
-    for comp in db_components:
-        db.refresh(comp)
-    return db_components
+    created_components = []
+    for comp in components:
+        # Check if component with same purl already exists
+        if comp.purl:
+            existing = get_component_by_purl(db, comp.purl)
+            if existing:
+                # Skip duplicate components
+                continue
+        
+        db_component = Component(**comp.model_dump())
+        db.add(db_component)
+        created_components.append(db_component)
+    
+    if created_components:
+        db.commit()
+        for comp in created_components:
+            db.refresh(comp)
+    
+    return created_components
 
 
 def update_component(db: Session, component_id: int, component: ComponentUpdate) -> Optional[Component]:
