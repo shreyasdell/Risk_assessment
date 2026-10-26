@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import SearchBar from './SearchBar';
+import dellLogo from '../../assets/dell_logo.webp';
 
 function Header() {
   const { user, logout } = useAuth();
@@ -22,15 +23,26 @@ function Header() {
       boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <img
-          src="/assets/dell_logo.webp"
-          alt="Dell Logo"
-          style={{
-            width: '36px',
-            height: '36px',
-            objectFit: 'contain'
-          }}
-        />
+        <div style={{
+          width: '36px',
+          height: '36px',
+          backgroundColor: '#0076CE',
+          borderRadius: '6px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '6px'
+        }}>
+          <img
+            src={dellLogo}
+            alt="Dell Logo"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain'
+            }}
+          />
+        </div>
         <div>
           <span style={{
             fontSize: '16px',

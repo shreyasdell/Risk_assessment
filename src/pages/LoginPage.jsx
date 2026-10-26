@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { loginUser } from '../api/client';
+import dellLogo from '../assets/dell_logo.webp';
 
 function LoginPage() {
   const [username, setUsername] = useState('');
@@ -68,7 +69,7 @@ function LoginPage() {
           textAlign: 'center'
         }}>
           <img
-            src="/assets/dell_logo.webp"
+            src={dellLogo}
             alt="Dell Logo"
             style={{
               width: '80px',
