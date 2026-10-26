@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import SearchBar from './SearchBar';
-import dellLogo from '../../assets/dell_logo.webp';
+import dellLogo from '../../assets/newlogo.png';
 
 function Header() {
   const { user, logout } = useAuth();

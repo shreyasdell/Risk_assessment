@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { loginUser } from '../api/client';
-import dellLogo from '../assets/dell_logo.webp';
+import dellLogo from '../assets/newlogo.png';
 
 function LoginPage() {
   const [username, setUsername] = useState('');
