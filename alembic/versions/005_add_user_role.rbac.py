@@ -17,11 +17,11 @@ depends_on = None
 
 
 def upgrade():
-    # Add role column to users table
-    op.add_column('users', sa.Column('role', sa.Enum('admin', 'analyst', 'viewer', name='userrole'), nullable=False, server_default='viewer'))
+    # Add role column to users table with uppercase enum values
+    op.execute("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'VIEWER'")
     
     # Set existing admin users to admin role
-    op.execute("UPDATE users SET role = 'admin' WHERE is_admin = 1")
+    op.execute("UPDATE users SET role = 'ADMIN' WHERE is_admin = 1")
 
 
 def downgrade():
