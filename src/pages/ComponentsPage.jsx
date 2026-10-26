@@ -11,12 +11,38 @@ function ComponentsPage() {
   const [syncingCVEs, setSyncingCVEs] = useState({});
   const [showCVEsModal, setShowCVEsModal] = useState(false);
   const [selectedComponentCVEs, setSelectedComponentCVEs] = useState(null);
+  const [selectedApplication, setSelectedApplication] = useState('');
   const [formData, setFormData] = useState({ name: '', version: '', component_type: 'library', purl: '', supplier: '', description: '', license: '', application_id: '' });
 
   useEffect(() => { loadComponents(); loadApplications(); }, []);
 
-  const loadComponents = async () => { try { const response = await fetchComponents(); setComponents(response.data); } catch (err) { console.error(err); } finally { setLoading(false); } };
+  const loadComponents = async () => { 
+    try { 
+      const params = selectedApplication ? { application_id: selectedApplication } : {};
+      const response = await fetchComponents(params); 
+      setComponents(response.data); 
+    } catch (err) { console.error(err); } finally { setLoading(false); } 
+  };
+  
   const loadApplications = async () => { try { const response = await fetchApplications(); setApplications(response.data); } catch (err) { console.error(err); } };
+
+  const handleApplicationFilterChange = (appId) => {
+    setSelectedApplication(appId);
+    setLoading(true);
+    // Reload components with new filter
+    const loadFiltered = async () => {
+      try {
+        const params = appId ? { application_id: appId } : {};
+        const response = await fetchComponents(params);
+        setComponents(response.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadFiltered();
+  };
 
   const handleDelete = async (id) => { if (window.confirm('Delete this component?')) { try { await deleteComponent(id); loadComponents(); } catch (err) { console.error(err); } } };
   const handleCreate = () => { setEditingComponent(null); setFormData({ name: '', version: '', component_type: 'library', purl: '', supplier: '', description: '', license: '', application_id: '' }); setShowModal(true); };
@@ -34,7 +60,19 @@ function ComponentsPage() {
           <h1 style={{ fontSize: '24px', fontWeight: 600, color: '#202020', margin: '0 0 8px 0' }}>Component Management</h1>
           <p style={{ fontSize: '14px', color: '#606060', margin: 0 }}>Manage software components and their vulnerabilities</p>
         </div>
-        <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Add Component</button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <select 
+            value={selectedApplication} 
+            onChange={(e) => handleApplicationFilterChange(e.target.value)}
+            style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020', backgroundColor: '#FFFFFF' }}
+          >
+            <option value="">All Applications</option>
+            {applications.map((app) => (
+              <option key={app.id} value={app.id}>{app.name}</option>
+            ))}
+          </select>
+          <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Add Component</button>
+        </div>
       </div>
 
       <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
@@ -54,7 +92,13 @@ function ComponentsPage() {
                 <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{component.name}</td>
                 <td style={{ padding: '12px 16px', color: '#606060' }}>{component.version || '—'}</td>
                 <td style={{ padding: '12px 16px', color: '#606060' }}>{component.component_type || '—'}</td>
-                <td style={{ padding: '12px 16px', color: '#606060' }}>{component.application_id || '—'}</td>
+                <td style={{ padding: '12px 16px', color: '#606060' }}>
+                  {component.application_id ? (
+                    applications.find(app => app.id === component.application_id)?.name || component.application_id
+                  ) : (
+                    '—'
+                  )}
+                </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                   <button onClick={() => handleSyncCVEs(component.id)} disabled={syncingCVEs[component.id]} style={{ background: syncingCVEs[component.id] ? '#64748B' : '#107C10', color: '#FFFFFF', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: syncingCVEs[component.id] ? 'not-allowed' : 'pointer', fontSize: '12px', marginRight: '8px' }}>{syncingCVEs[component.id] ? 'Syncing...' : 'Sync CVEs'}</button>
                   <button onClick={() => handleViewCVEs(component.id)} style={{ background: 'none', border: 'none', color: '#F4B400', cursor: 'pointer', fontSize: '13px', marginRight: '8px' }}>View CVEs</button>

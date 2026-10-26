@@ -17,19 +17,24 @@ function ApplicationsPage() {
   const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState({ name: '', description: '', owner: '', business_unit: '', criticality: 'medium', internet_facing: false, data_classification: 'internal', environment: 'development', vendor_id: '' });
 
-  useEffect(() => { loadApplications(); loadVendors(); loadRiskScores(); }, []);
+  useEffect(() => { loadApplications(); loadVendors(); }, []);
 
   const loadApplications = async () => {
-    try { const response = await fetchApplications(); setApps(response.data); } catch (err) { console.error(err); } finally { setLoading(false); }
+    try { 
+      const response = await fetchApplications(); 
+      setApps(response.data);
+      // Load risk scores after applications are loaded
+      loadRiskScores(response.data);
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   const loadVendors = async () => {
     try { const response = await fetchVendors(); setVendors(response.data); } catch (err) { console.error(err); }
   };
 
-  const loadRiskScores = async () => {
+  const loadRiskScores = async (applications) => {
     const scores = {};
-    for (const app of apps) {
+    for (const app of applications) {
       try {
         const response = await fetchRiskScore(app.id);
         scores[app.id] = response.data;
@@ -76,7 +81,6 @@ function ApplicationsPage() {
       await calculateRiskScore(appId);
       alert('Risk score calculated successfully');
       loadApplications();
-      loadRiskScores();
     } catch (err) {
       console.error(err);
       alert('Failed to calculate risk score');
