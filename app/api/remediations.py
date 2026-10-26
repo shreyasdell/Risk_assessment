@@ -10,6 +10,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.auth.dependencies import get_current_user
+from app.auth.rbac import require_write_access, require_delete_access
 from app.services.remediation_service import remediation_service
 
 router = APIRouter(prefix="/remediations", tags=["Remediations"])
@@ -25,7 +26,7 @@ def create_remediation(
     due_date: Optional[str] = None,
     recommended_action: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(require_write_access)
 ):
     """
     Create a new remediation task to track fixing a CVE.

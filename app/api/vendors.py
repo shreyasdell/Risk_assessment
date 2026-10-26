@@ -13,6 +13,7 @@ from app.services.vendor_service import (
     delete_vendor
 )
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
 from app.models.vendor import Vendor
 from app.models.application import Application
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/vendors", tags=["Vendors"])
 def create_vendor_endpoint(
     vendor: VendorCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     db_vendor = get_vendor_by_name(db, name=vendor.name)
     if db_vendor:
@@ -191,7 +192,7 @@ def update_vendor_endpoint(
     vendor_id: int,
     vendor: VendorUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     db_vendor = update_vendor(db, vendor_id=vendor_id, vendor=vendor)
     if db_vendor is None:
@@ -203,7 +204,7 @@ def update_vendor_endpoint(
 def delete_vendor_endpoint(
     vendor_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_delete_access)
 ):
     success = delete_vendor(db, vendor_id=vendor_id)
     if not success:

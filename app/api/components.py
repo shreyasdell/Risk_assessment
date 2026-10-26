@@ -12,6 +12,7 @@ from app.services.component_service import (
 )
 from app.services.sbom_service import process_sbom_upload
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
 
 router = APIRouter(prefix="/components", tags=["Components"])
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/components", tags=["Components"])
 def create_component_endpoint(
     component: ComponentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     return create_component(db=db, component=component)
 
@@ -56,7 +57,7 @@ def update_component_endpoint(
     component_id: int,
     component: ComponentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     db_component = update_component(db, component_id=component_id, component=component)
     if db_component is None:
@@ -68,7 +69,7 @@ def update_component_endpoint(
 def delete_component_endpoint(
     component_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_delete_access)
 ):
     success = delete_component(db, component_id=component_id)
     if not success:
@@ -82,7 +83,7 @@ def upload_sbom(
     application_id: Optional[int] = Form(None),
     replace_existing: bool = Form(False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Upload and parse SBOM file (CycloneDX or SPDX format)

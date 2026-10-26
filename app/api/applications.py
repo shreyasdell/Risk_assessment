@@ -11,6 +11,7 @@ from app.services.application_service import (
     delete_application
 )
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/applications", tags=["Applications"])
 def create_application_endpoint(
     application: ApplicationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     return create_application(db=db, application=application)
 
@@ -54,7 +55,7 @@ def update_application_endpoint(
     application_id: int,
     application: ApplicationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     db_application = update_application(db, application_id=application_id, application=application)
     if db_application is None:
@@ -66,7 +67,7 @@ def update_application_endpoint(
 def delete_application_endpoint(
     application_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_delete_access)
 ):
     success = delete_application(db, application_id=application_id)
     if not success:

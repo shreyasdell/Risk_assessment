@@ -15,6 +15,7 @@ from app.services.cve_service import (
 )
 from app.services.nvd_service import nvd_service
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
 
 router = APIRouter(prefix="/cves", tags=["CVEs"])
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/cves", tags=["CVEs"])
 def create_cve_endpoint(
     cve: CVECreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     # Check if CVE already exists
     existing = get_cve_by_cve_id(db, cve.cve_id)
@@ -40,7 +41,7 @@ def create_cve_endpoint(
 def create_cves_bulk_endpoint(
     cves: List[CVECreate],
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     return create_cves_bulk(db=db, cves=cves)
 
@@ -95,7 +96,7 @@ def update_cve_endpoint(
     cve_id: int,
     cve: CVEUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     db_cve = update_cve(db, cve_id=cve_id, cve=cve)
     if db_cve is None:
@@ -107,7 +108,7 @@ def update_cve_endpoint(
 def delete_cve_endpoint(
     cve_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_delete_access)
 ):
     success = delete_cve(db, cve_id=cve_id)
     if not success:
