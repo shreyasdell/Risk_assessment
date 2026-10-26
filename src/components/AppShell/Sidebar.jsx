@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const Icons = {
   Dashboard: () => (
@@ -112,6 +113,7 @@ const Icons = {
 function Sidebar({ collapsed, onToggle }) {
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useState({});
+  const { canManageUsers } = useAuth();
 
   const menuItems = [
     { path: '/dashboard', icon: Icons.Dashboard, label: 'Dashboard' },
@@ -131,7 +133,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/remediations', icon: Icons.Remediations, label: 'Remediations' },
     { path: '/nist', icon: Icons.NIST, label: 'NIST Recommendations' },
     { path: '/audit', icon: Icons.Audit, label: 'Audit Logs' },
-    { path: '/settings', icon: Icons.Settings, label: 'Settings' }
+    ...(canManageUsers() ? [{ path: '/settings', icon: Icons.Settings, label: 'Settings' }] : [])
   ];
 
   const toggleMenu = (label) => {
