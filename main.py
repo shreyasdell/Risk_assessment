@@ -19,7 +19,8 @@ app.add_middleware(
 )
 
 # Add security middleware
-app.middleware("http")(rate_limit_middleware)
+# Note: Rate limiting disabled for development - enable in production
+# app.middleware("http")(rate_limit_middleware)
 # Note: CSRF middleware disabled for development - enable in production
 # app.middleware("http")(csrf_middleware)
 

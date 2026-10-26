@@ -13,15 +13,18 @@ class ApplicationBase(BaseModel):
     criticality: CriticalityEnum = CriticalityEnum.MEDIUM
     internet_facing: bool = False
     data_classification: DataClassificationEnum = DataClassificationEnum.INTERNAL
-    environment: EnvironmentEnum = EnvironmentEnum.PRODUCTION
+    environment: EnvironmentEnum = EnvironmentEnum.DEVELOPMENT
     vendor_id: Optional[int] = Field(None, ge=1, description="Vendor ID")
 
     @field_validator('name')
     @classmethod
-    def name_must_not_contain_special_chars(cls, v):
-        if not re.match(r'^[a-zA-Z0-9\s\-_.]+$', v):
-            raise ValueError('Name must not contain special characters')
-        return v.strip()
+    def name_must_be_valid(cls, v):
+        # More lenient validation - allow common characters
+        if not v or not v.strip():
+            raise ValueError('Name cannot be empty')
+        # Remove potentially dangerous characters but allow most common ones
+        v = re.sub(r'[<>\"\'\\]', '', v)
+        return v.strip()[:255]
 
 
 class ApplicationCreate(ApplicationBase):
@@ -41,10 +44,13 @@ class ApplicationUpdate(BaseModel):
 
     @field_validator('name')
     @classmethod
-    def name_must_not_contain_special_chars(cls, v):
-        if v is not None and not re.match(r'^[a-zA-Z0-9\s\-_.]+$', v):
-            raise ValueError('Name must not contain special characters')
-        return v.strip() if v else v
+    def name_must_be_valid(cls, v):
+        if v is not None:
+            if not v or not v.strip():
+                raise ValueError('Name cannot be empty')
+            v = re.sub(r'[<>\"\'\\]', '', v)
+            return v.strip()[:255]
+        return v
 
 
 class ApplicationResponse(ApplicationBase):
