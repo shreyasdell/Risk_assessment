@@ -68,8 +68,13 @@ function ApplicationsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      if (editingApp) await updateApplication(editingApp.id, formData);
-      else await createApplication(formData);
+      // Convert empty string vendor_id to null
+      const submissionData = {
+        ...formData,
+        vendor_id: formData.vendor_id ? parseInt(formData.vendor_id) : null
+      };
+      if (editingApp) await updateApplication(editingApp.id, submissionData);
+      else await createApplication(submissionData);
       setShowModal(false);
       loadApplications();
     } catch (err) {

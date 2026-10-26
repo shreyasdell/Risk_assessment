@@ -14,7 +14,7 @@ class ApplicationBase(BaseModel):
     internet_facing: bool = False
     data_classification: DataClassificationEnum = DataClassificationEnum.INTERNAL
     environment: EnvironmentEnum = EnvironmentEnum.DEVELOPMENT
-    vendor_id: Optional[int] = Field(None, ge=1, description="Vendor ID")
+    vendor_id: Optional[int] = Field(None, description="Vendor ID")
 
     @field_validator('name')
     @classmethod
@@ -40,7 +40,7 @@ class ApplicationUpdate(BaseModel):
     internet_facing: Optional[bool] = None
     data_classification: Optional[DataClassificationEnum] = None
     environment: Optional[EnvironmentEnum] = None
-    vendor_id: Optional[int] = Field(None, ge=1)
+    vendor_id: Optional[int] = Field(None)
 
     @field_validator('name')
     @classmethod
