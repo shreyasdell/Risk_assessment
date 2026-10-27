@@ -189,7 +189,7 @@ function VendorsPage() {
             </div>
             <form onSubmit={handleSubmit} style={{ padding: '24px' }}>
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: 500, color: '#606060' }}>Name *</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: 500, color: '#606060' }}>Name <span style={{ color: '#D13438' }}>*</span></label>
                 <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }} />
               </div>
               <div style={{ marginBottom: '16px' }}>
