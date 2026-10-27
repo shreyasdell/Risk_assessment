@@ -94,6 +94,8 @@ def upload_sbom(
     - SPDX JSON (.json)
     - SPDX RDF/XML (.xml)
     """
+    print(f"DEBUG: SBOM upload - application_id received: {application_id}")
+    
     # Validate file size (max 10MB)
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     content = file.file.read()

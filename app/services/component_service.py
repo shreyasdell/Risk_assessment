@@ -38,11 +38,14 @@ def create_component(db: Session, component: ComponentCreate) -> Component:
 def create_components_bulk(db: Session, components: List[ComponentCreate]) -> List[Component]:
     created_components = []
     for comp in components:
-        # Check if component with same purl already exists
+        # Check if component with same purl AND same application_id already exists
         if comp.purl:
-            existing = get_component_by_purl(db, comp.purl)
+            existing = db.query(Component).filter(
+                Component.purl == comp.purl,
+                Component.application_id == comp.application_id
+            ).first()
             if existing:
-                # Skip duplicate components
+                # Skip duplicate components for the same application
                 continue
         
         db_component = Component(**comp.model_dump())

@@ -26,8 +26,11 @@ def process_sbom_upload(
     Returns:
         dict with upload results
     """
+    print(f"DEBUG: process_sbom_upload - application_id: {application_id}")
+    
     # Generate unique SBOM ID
     sbom_id = str(uuid.uuid4())
+    print(f"DEBUG: Generated sbom_id: {sbom_id}")
     
     # If replace_existing and application_id provided, delete old components
     if replace_existing and application_id:
@@ -36,6 +39,9 @@ def process_sbom_upload(
     # Parse SBOM content
     try:
         components = SBOMParser.parse(content, filename, application_id, sbom_id)
+        print(f"DEBUG: Parsed {len(components)} components")
+        if components and len(components) > 0:
+            print(f"DEBUG: First component application_id: {components[0].application_id}")
     except Exception as e:
         raise ValueError(f"Failed to parse SBOM: {str(e)}")
     

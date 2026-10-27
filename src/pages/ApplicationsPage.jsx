@@ -289,7 +289,7 @@ function ApplicationsPage() {
           <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', width: '500px', maxWidth: '90%', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.12)' }}>
             <div style={{ padding: '24px', borderBottom: '1px solid #E5E5E5' }}>
               <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', margin: 0 }}>Upload SBOM</h2>
-              <p style={{ fontSize: '13px', color: '#606060', margin: '8px 0 0 0' }}>Application: {selectedAppForSBOM?.name}</p>
+              <p style={{ fontSize: '13px', color: '#606060', margin: '8px 0 0 0' }}>Application: {selectedAppForSBOM?.name} (ID: {selectedAppForSBOM?.id})</p>
             </div>
             <div style={{ padding: '24px' }}>
               <div
