@@ -23,7 +23,7 @@ class Component(Base):
     name = Column(String, index=True, nullable=False)
     version = Column(String, index=True, nullable=False)
     component_type = Column(Enum(ComponentTypeEnum), default=ComponentTypeEnum.LIBRARY)
-    purl = Column(String, unique=True, index=True, nullable=True)  # Package URL
+    purl = Column(String, index=True, nullable=True)  # Package URL (not unique - can exist in multiple applications)
     supplier = Column(String, nullable=True)
     description = Column(Text, nullable=True)
     license = Column(String, nullable=True)
