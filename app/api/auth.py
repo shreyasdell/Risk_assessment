@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.user import UserCreate, UserResponse, UserLogin, Token, UserUpdate
 from app.services.auth_service import create_user, login_user, get_user_by_username, get_user_by_email, update_user
-from app.auth.dependencies import get_current_active_user, get_current_admin_user
+from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_admin, require_user_management
-from app.models.user import User, UserRole
+from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -75,7 +75,7 @@ def update_user_endpoint(
     current_user: User = Depends(require_user_management)
 ):
     # Only admins can change roles
-    if user_update.role and current_user.role != UserRole.ADMIN:
+    if user_update.role and current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can change user roles"

@@ -1,13 +1,12 @@
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
 from typing import Optional
-from app.models.user import UserRole
 
 
 class UserBase(BaseModel):
     username: str
     email: EmailStr
-    role: UserRole = UserRole.VIEWER
+    role: str = "viewer"  # Changed from Enum to String
 
 
 class UserCreate(UserBase):

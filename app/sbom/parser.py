@@ -1,7 +1,7 @@
 import json
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Optional
-from app.schemas.component import ComponentCreate, ComponentTypeEnum
+from app.schemas.component import ComponentCreate
 
 
 class SBOMParser:
@@ -160,20 +160,20 @@ class SBOMParser:
         raise NotImplementedError("SPDX RDF/XML parsing requires rdflib library")
     
     @staticmethod
-    def _map_component_type(cyclonedx_type: str) -> ComponentTypeEnum:
-        """Map CycloneDX component type to our enum"""
+    def _map_component_type(cyclonedx_type: str) -> str:
+        """Map CycloneDX component type to our string values"""
         type_mapping = {
-            "library": ComponentTypeEnum.LIBRARY,
-            "framework": ComponentTypeEnum.FRAMEWORK,
-            "application": ComponentTypeEnum.PLATFORM,
-            "operating-system": ComponentTypeEnum.OPERATING_SYSTEM,
-            "device": ComponentTypeEnum.PLATFORM,
-            "firmware": ComponentTypeEnum.PLATFORM,
-            "file": ComponentTypeEnum.OTHER,
-            "container": ComponentTypeEnum.PLATFORM,
-            "platform": ComponentTypeEnum.PLATFORM
+            "library": "library",
+            "framework": "framework",
+            "application": "platform",
+            "operating-system": "operating_system",
+            "device": "platform",
+            "firmware": "platform",
+            "file": "other",
+            "container": "platform",
+            "platform": "platform"
         }
-        return type_mapping.get(cyclonedx_type.lower(), ComponentTypeEnum.LIBRARY)
+        return type_mapping.get(cyclonedx_type.lower(), "library")
     
     @staticmethod
     def detect_format(content: str, filename: str) -> str:

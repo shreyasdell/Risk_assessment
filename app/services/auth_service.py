@@ -12,7 +12,7 @@ def create_user(db: Session, user: UserCreate) -> User:
         username=user.username,
         email=user.email,
         hashed_password=hashed_password,
-        role=user.role
+        role=user.role  # Now a string instead of enum
     )
     db.add(db_user)
     db.commit()

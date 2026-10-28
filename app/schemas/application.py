@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from typing import Optional
-from app.models.application import EnvironmentEnum, CriticalityEnum, DataClassificationEnum
 import re
 
 
@@ -10,10 +9,10 @@ class ApplicationBase(BaseModel):
     description: Optional[str] = Field(None, max_length=2000, description="Application description")
     owner: Optional[str] = Field(None, max_length=100, description="Application owner")
     business_unit: Optional[str] = Field(None, max_length=100, description="Business unit")
-    criticality: CriticalityEnum = CriticalityEnum.MEDIUM
+    criticality: str = "medium"  # Changed from Enum to String
     internet_facing: bool = False
-    data_classification: DataClassificationEnum = DataClassificationEnum.INTERNAL
-    environment: EnvironmentEnum = EnvironmentEnum.DEVELOPMENT
+    data_classification: str = "internal"  # Changed from Enum to String
+    environment: str = "production"  # Changed from Enum to String
     vendor_id: Optional[int] = Field(None, description="Vendor ID")
 
     @field_validator('name')
@@ -36,10 +35,10 @@ class ApplicationUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=2000)
     owner: Optional[str] = Field(None, max_length=100)
     business_unit: Optional[str] = Field(None, max_length=100)
-    criticality: Optional[CriticalityEnum] = None
+    criticality: Optional[str] = None  # Changed from Enum to String
     internet_facing: Optional[bool] = None
-    data_classification: Optional[DataClassificationEnum] = None
-    environment: Optional[EnvironmentEnum] = None
+    data_classification: Optional[str] = None  # Changed from Enum to String
+    environment: Optional[str] = None  # Changed from Enum to String
     vendor_id: Optional[int] = Field(None)
 
     @field_validator('name')

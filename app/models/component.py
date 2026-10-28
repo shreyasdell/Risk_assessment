@@ -1,19 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-import enum
 from app.core.database import Base
-
-
-class ComponentTypeEnum(str, enum.Enum):
-    LIBRARY = "library"
-    FRAMEWORK = "framework"
-    SDK = "sdk"
-    TOOL = "tool"
-    PLATFORM = "platform"
-    OPERATING_SYSTEM = "operating_system"
-    DATABASE = "database"
-    OTHER = "other"
 
 
 class Component(Base):
@@ -22,7 +10,7 @@ class Component(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
     version = Column(String, index=True, nullable=False)
-    component_type = Column(Enum(ComponentTypeEnum), default=ComponentTypeEnum.LIBRARY)
+    component_type = Column(String, default="library")  # Changed from Enum to String for PostgreSQL compatibility
     purl = Column(String, index=True, nullable=True)  # Package URL (not unique - can exist in multiple applications)
     supplier = Column(String, nullable=True)
     description = Column(Text, nullable=True)
