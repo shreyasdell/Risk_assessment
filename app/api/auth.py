@@ -75,7 +75,7 @@ def update_user_endpoint(
     current_user: User = Depends(require_user_management)
 ):
     # Only admins can change roles
-    if user_update.role and current_user.role != "admin":
+    if user_update.role and current_user.role.lower() != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can change user roles"

@@ -7,7 +7,7 @@ from app.models.user import User
 
 def require_admin(current_user: User = Depends(get_current_active_user)) -> User:
     """Require admin role"""
-    if current_user.role != "admin":
+    if current_user.role.lower() != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
@@ -17,7 +17,7 @@ def require_admin(current_user: User = Depends(get_current_active_user)) -> User
 
 def require_admin_or_analyst(current_user: User = Depends(get_current_active_user)) -> User:
     """Require admin or analyst role"""
-    if current_user.role not in ["admin", "analyst"]:
+    if current_user.role.lower() not in ["admin", "analyst"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Analyst or admin access required"
@@ -27,7 +27,7 @@ def require_admin_or_analyst(current_user: User = Depends(get_current_active_use
 
 def require_write_access(current_user: User = Depends(get_current_active_user)) -> User:
     """Require write access (admin or analyst)"""
-    if current_user.role not in ["admin", "analyst"]:
+    if current_user.role.lower() not in ["admin", "analyst"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Write access requires analyst or admin role"
@@ -37,7 +37,7 @@ def require_write_access(current_user: User = Depends(get_current_active_user)) 
 
 def require_delete_access(current_user: User = Depends(get_current_active_user)) -> User:
     """Require delete access (admin only)"""
-    if current_user.role != "admin":
+    if current_user.role.lower() != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Delete access requires admin role"
@@ -47,7 +47,7 @@ def require_delete_access(current_user: User = Depends(get_current_active_user))
 
 def require_user_management(current_user: User = Depends(get_current_active_user)) -> User:
     """Require user management access (admin only)"""
-    if current_user.role != "admin":
+    if current_user.role.lower() != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User management requires admin role"

@@ -36,7 +36,7 @@ export function AuthProvider({ children }) {
   };
 
   const hasRole = (role) => {
-    return user?.role === role;
+    return user?.role?.toLowerCase() === role.toLowerCase();
   };
 
   const isAdmin = () => hasRole('admin');
