@@ -23,7 +23,6 @@ class Application(Base):
     vendor = relationship("Vendor", backref="applications")
     components = relationship(
         "Component",
-        backref="application",
         cascade="all, delete-orphan"
     )
     risk_scores = relationship(
