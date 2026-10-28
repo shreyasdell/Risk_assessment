@@ -1,14 +1,13 @@
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from typing import Optional
-from app.models.component import ComponentTypeEnum
 import re
 
 
 class ComponentBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Component name")
     version: str = Field(..., min_length=1, max_length=100, description="Component version")
-    component_type: ComponentTypeEnum = ComponentTypeEnum.LIBRARY
+    component_type: str = "library"  # Changed from Enum to String
     purl: Optional[str] = Field(None, max_length=500, description="Package URL")
     supplier: Optional[str] = Field(None, max_length=100, description="Supplier name")
     description: Optional[str] = Field(None, max_length=2000, description="Component description")
@@ -35,7 +34,7 @@ class ComponentCreate(ComponentBase):
 class ComponentUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     version: Optional[str] = Field(None, min_length=1, max_length=100)
-    component_type: Optional[ComponentTypeEnum] = None
+    component_type: Optional[str] = None  # Changed from Enum to String
     purl: Optional[str] = Field(None, max_length=500)
     supplier: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = Field(None, max_length=2000)

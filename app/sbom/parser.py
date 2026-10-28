@@ -142,7 +142,7 @@ class SBOMParser:
         return ComponentCreate(
             name=name,
             version=version,
-            component_type=ComponentTypeEnum.LIBRARY,
+            component_type="library",  # Changed from Enum to String
             purl=purl_value,
             supplier=supplier,
             description=description,

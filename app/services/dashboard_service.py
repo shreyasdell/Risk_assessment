@@ -2,9 +2,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Dict
 from datetime import datetime, timedelta
-from app.models.application import Application, CriticalityEnum, EnvironmentEnum
+from app.models.application import Application
 from app.models.vendor import Vendor
-from app.models.component import Component, ComponentTypeEnum
+from app.models.component import Component
 from app.schemas.dashboard import (
     DashboardSummary,
     CriticalityDistribution,
@@ -27,7 +27,7 @@ def get_dashboard_summary(db: Session) -> DashboardSummary:
     total_components = db.query(func.count(Component.id)).scalar() or 0
     
     critical_applications = db.query(func.count(Application.id)).filter(
-        Application.criticality == CriticalityEnum.CRITICAL
+        Application.criticality == "critical"
     ).scalar() or 0
     
     internet_facing_apps = db.query(func.count(Application.id)).filter(
@@ -35,7 +35,7 @@ def get_dashboard_summary(db: Session) -> DashboardSummary:
     ).scalar() or 0
     
     production_apps = db.query(func.count(Application.id)).filter(
-        Application.environment == EnvironmentEnum.PRODUCTION
+        Application.environment == "production"
     ).scalar() or 0
     
     return DashboardSummary(
@@ -62,7 +62,7 @@ def get_criticality_distribution(db: Session) -> List[CriticalityDistribution]:
     for result in results:
         percentage = (result.count / total * 100) if total > 0 else 0
         distribution.append(CriticalityDistribution(
-            criticality=result.criticality.value if result.criticality else "unknown",
+            criticality=result.criticality if result.criticality else "unknown",
             count=result.count,
             percentage=round(percentage, 2)
         ))
@@ -84,7 +84,7 @@ def get_environment_distribution(db: Session) -> List[EnvironmentDistribution]:
     for result in results:
         percentage = (result.count / total * 100) if total > 0 else 0
         distribution.append(EnvironmentDistribution(
-            environment=result.environment.value if result.environment else "unknown",
+            environment=result.environment if result.environment else "unknown",
             count=result.count,
             percentage=round(percentage, 2)
         ))
@@ -106,7 +106,7 @@ def get_component_type_distribution(db: Session) -> List[ComponentTypeDistributi
     for result in results:
         percentage = (result.count / total * 100) if total > 0 else 0
         distribution.append(ComponentTypeDistribution(
-            component_type=result.component_type.value if result.component_type else "unknown",
+            component_type=result.component_type if result.component_type else "unknown",
             count=result.count,
             percentage=round(percentage, 2)
         ))
@@ -167,7 +167,7 @@ def get_top_applications(db: Session, limit: int = 10) -> List[TopApplication]:
             application_id=result.id,
             application_name=result.name,
             component_count=result.component_count,
-            criticality=result.criticality.value if result.criticality else "unknown",
+            criticality=result.criticality if result.criticality else "unknown",
             internet_facing=result.internet_facing
         ))
     
@@ -249,7 +249,7 @@ def get_vendor_dashboard(db: Session, vendor_id: int) -> VendorDashboard:
         Application, Component.application_id == Application.id
     ).filter(Application.vendor_id == vendor_id).scalar() or 0
 
-    critical_apps = sum(1 for app in applications if app.criticality == CriticalityEnum.CRITICAL)
+    critical_apps = sum(1 for app in applications if app.criticality == "critical")
     internet_facing = sum(1 for app in applications if app.internet_facing)
 
     # Get top applications for this vendor
@@ -271,7 +271,7 @@ def get_vendor_dashboard(db: Session, vendor_id: int) -> VendorDashboard:
             application_id=result.id,
             application_name=result.name,
             component_count=result.component_count,
-            criticality=result.criticality.value if result.criticality else "unknown",
+            criticality=result.criticality if result.criticality else "unknown",
             internet_facing=result.internet_facing
         ))
 
@@ -318,7 +318,7 @@ def get_application_dashboard(db: Session, application_id: int) -> ApplicationDa
     for result in results:
         percentage = (result.count / total * 100) if total > 0 else 0
         type_distribution.append(ComponentTypeDistribution(
-            component_type=result.component_type.value if result.component_type else "unknown",
+            component_type=result.component_type if result.component_type else "unknown",
             count=result.count,
             percentage=round(percentage, 2)
         ))
@@ -327,10 +327,10 @@ def get_application_dashboard(db: Session, application_id: int) -> ApplicationDa
         application_id=application.id,
         application_name=application.name,
         component_count=component_count,
-        criticality=application.criticality.value if application.criticality else "unknown",
+        criticality=application.criticality if application.criticality else "unknown",
         internet_facing=application.internet_facing,
-        environment=application.environment.value if application.environment else "unknown",
-        data_classification=application.data_classification.value if application.data_classification else "unknown",
+        environment=application.environment if application.environment else "unknown",
+        data_classification=application.data_classification if application.data_classification else "unknown",
         vendor_name=vendor_name,
         component_type_distribution=type_distribution
     )
