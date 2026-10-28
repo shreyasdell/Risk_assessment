@@ -303,10 +303,11 @@ class NVDService:
                     name_found = True
                     break
 
-            # Also check the CVE references
-            refs = cve.get("references", "") or ""
-            if clean_name in refs.lower():
-                name_found = True
+            # Also check the CVE references (list of URLs)
+            refs = cve.get("references", [])
+            if not name_found and refs:
+                if any(clean_name in ref.get("url", "").lower() for ref in refs):
+                    name_found = True
 
             if name_found:
                 relevant.append(cve)
