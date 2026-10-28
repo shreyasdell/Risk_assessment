@@ -48,8 +48,19 @@ function ApplicationsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this application?')) {
-      try { await deleteApplication(id); loadApplications(); } catch (err) { console.error(err); }
+    const app = applications.find(a => a.id === id);
+    if (!app) return;
+    
+    const confirmMessage = `Delete application "${app.name}"?\n\nThis will also delete all associated components, risk scores, and remediations. This action cannot be undone.`;
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        await deleteApplication(id);
+        loadApplications();
+      } catch (err) {
+        console.error(err);
+        alert('Failed to delete application');
+      }
     }
   };
 

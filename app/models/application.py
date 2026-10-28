@@ -21,6 +21,11 @@ class Application(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     vendor = relationship("Vendor", backref="applications")
+    components = relationship(
+        "Component",
+        backref="application",
+        cascade="all, delete-orphan"
+    )
     risk_scores = relationship(
         "RiskScore",
         back_populates="application",
