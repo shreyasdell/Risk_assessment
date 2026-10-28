@@ -14,29 +14,51 @@ function ComponentsPage() {
   const [selectedComponentCVEs, setSelectedComponentCVEs] = useState(null);
   const [selectedApplication, setSelectedApplication] = useState('');
   const [formData, setFormData] = useState({ name: '', version: '', component_type: 'library', purl: '', supplier: '', description: '', license: '', application_id: '' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalComponents, setTotalComponents] = useState(0);
   const { canWrite, canDelete } = useAuth();
 
-  useEffect(() => { loadComponents(); loadApplications(); }, []);
+  useEffect(() => { loadComponents(); loadApplications(); }, [currentPage, pageSize]);
 
-  const loadComponents = async () => { 
-    try { 
-      const params = selectedApplication ? { application_id: selectedApplication } : {};
-      const response = await fetchComponents(params); 
-      setComponents(response.data); 
-    } catch (err) { console.error(err); } finally { setLoading(false); } 
+  const loadComponents = async () => {
+    try {
+      const params = {
+        skip: (currentPage - 1) * pageSize,
+        limit: pageSize,
+      };
+      if (selectedApplication) {
+        params.application_id = selectedApplication;
+      }
+      const response = await fetchComponents(params);
+      setComponents(response.data);
+      setTotalComponents(response.total || response.data.length);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
   
   const loadApplications = async () => { try { const response = await fetchApplications(); setApplications(response.data); } catch (err) { console.error(err); } };
 
   const handleApplicationFilterChange = (appId) => {
     setSelectedApplication(appId);
+    setCurrentPage(1); // Reset to first page when filter changes
     setLoading(true);
     // Reload components with new filter
     const loadFiltered = async () => {
       try {
-        const params = appId ? { application_id: appId } : {};
+        const params = {
+          skip: 0,
+          limit: pageSize,
+        };
+        if (appId) {
+          params.application_id = appId;
+        }
         const response = await fetchComponents(params);
         setComponents(response.data);
+        setTotalComponents(response.total || response.data.length);
       } catch (err) {
         console.error(err);
       } finally {
@@ -119,6 +141,78 @@ function ComponentsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '16px', backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px' }}>
+        <div style={{ fontSize: '13px', color: '#606060' }}>
+          Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalComponents)} of {totalComponents} components
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #D9D9D9',
+              backgroundColor: currentPage === 1 ? '#F5F5F5' : '#FFFFFF',
+              color: currentPage === 1 ? '#A0A0A0' : '#202020',
+              borderRadius: '4px',
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            First
+          </button>
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #D9D9D9',
+              backgroundColor: currentPage === 1 ? '#F5F5F5' : '#FFFFFF',
+              color: currentPage === 1 ? '#A0A0A0' : '#202020',
+              borderRadius: '4px',
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            Previous
+          </button>
+          <span style={{ padding: '6px 12px', fontSize: '13px', color: '#606060' }}>
+            Page {currentPage} of {Math.ceil(totalComponents / pageSize)}
+          </span>
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalComponents / pageSize), prev + 1))}
+            disabled={currentPage >= Math.ceil(totalComponents / pageSize)}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #D9D9D9',
+              backgroundColor: currentPage >= Math.ceil(totalComponents / pageSize) ? '#F5F5F5' : '#FFFFFF',
+              color: currentPage >= Math.ceil(totalComponents / pageSize) ? '#A0A0A0' : '#202020',
+              borderRadius: '4px',
+              cursor: currentPage >= Math.ceil(totalComponents / pageSize) ? 'not-allowed' : 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            Next
+          </button>
+          <button
+            onClick={() => setCurrentPage(Math.ceil(totalComponents / pageSize))}
+            disabled={currentPage >= Math.ceil(totalComponents / pageSize)}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #D9D9D9',
+              backgroundColor: currentPage >= Math.ceil(totalComponents / pageSize) ? '#F5F5F5' : '#FFFFFF',
+              color: currentPage >= Math.ceil(totalComponents / pageSize) ? '#A0A0A0' : '#202020',
+              borderRadius: '4px',
+              cursor: currentPage >= Math.ceil(totalComponents / pageSize) ? 'not-allowed' : 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            Last
+          </button>
+        </div>
       </div>
 
       {showModal && (

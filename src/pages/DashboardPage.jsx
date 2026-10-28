@@ -487,6 +487,17 @@ export default function DashboardPage() {
         return () => clearInterval(interval);
     }, [loadData]);
 
+    // Refresh when page becomes visible (user navigates back)
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                loadData();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [loadData]);
+
     if (loading) {
         return (
             <div style={{
