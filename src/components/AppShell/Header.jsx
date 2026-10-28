@@ -67,44 +67,6 @@ function Header() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
         <SearchBar />
 
-        <button style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: '#5A5A5A',
-          padding: '8px',
-          position: 'relative',
-          borderRadius: '6px',
-          transition: 'background-color 100ms ease-in-out'
-        }}
-          onMouseEnter={(e) => e.target.style.backgroundColor = '#F5F7FA'}
-          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2Z"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <path
-              d="M10 6V10H14"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span style={{
-            position: 'absolute',
-            top: '6px',
-            right: '6px',
-            width: '8px',
-            height: '8px',
-            backgroundColor: '#D13438',
-            borderRadius: '50%',
-            border: '2px solid #FFFFFF'
-          }}></span>
-        </button>
-
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
