@@ -331,12 +331,11 @@ function RecentAppsTable({ apps }) {
                                         borderRadius: '4px',
                                         fontSize: '12px',
                                         fontWeight: 500,
-                                        textTransform: 'uppercase',
                                         backgroundColor: app.criticality === 'critical' ? '#FDE8E8' : app.criticality === 'high' ? '#FFF4E5' : '#E6F4EA',
                                         color: app.criticality === 'critical' ? '#D13438' : app.criticality === 'high' ? '#F4B400' : '#107C10'
                                     }}
                                 >
-                                    {app.criticality}
+                                    {app.criticality ? app.criticality.charAt(0).toUpperCase() + app.criticality.slice(1).toLowerCase() : 'Unknown'}
                                 </span>
                             </td>
                             <td style={{ padding: '12px 16px', color: '#606060' }}>{app.environment}</td>
