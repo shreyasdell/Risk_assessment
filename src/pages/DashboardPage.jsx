@@ -5,7 +5,7 @@ import {
     AreaChart, Area,
     ResponsiveContainer,
 } from 'recharts';
-import { fetchDashboard } from '../api/client';
+import { fetchDashboard, refreshComponentCount } from '../api/client';
 import api from '../api/client';
 
 // ─── Color Palettes ────────────────────────────────────
@@ -442,13 +442,25 @@ export default function DashboardPage() {
         try {
             setError(null);
 
-            const [dashRes, appRes] = await Promise.all([
+            const [dashRes, appRes, compCountRes] = await Promise.all([
                 api.get('/dashboard/'),
                 api.get('/applications/'),
+                refreshComponentCount(),
             ]);
 
             setDashboard(dashRes.data);
             setApps(appRes.data);
+
+            // Update component count from fresh count
+            if (compCountRes.data && compCountRes.data.total_components !== undefined) {
+                setDashboard(prev => ({
+                    ...prev,
+                    summary: {
+                        ...prev.summary,
+                        total_components: compCountRes.data.total_components
+                    }
+                }));
+            }
 
             // Try to load risk scores (may not exist)
             try {

@@ -47,6 +47,9 @@ export const getCurrentUser = () =>
 export const fetchDashboard = (params = {}) =>
   apiClient.get('/dashboard', { params });
 
+export const refreshComponentCount = () =>
+  apiClient.get('/dashboard/refresh-component-count');
+
 export const fetchVendors = (params = {}) =>
   apiClient.get('/vendors', { params });
 
