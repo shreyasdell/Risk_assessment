@@ -16,6 +16,7 @@ import CVEsPage from './pages/CVEsPage';
 import NISTPage from './pages/NISTPage';
 import RemediationsPage from './pages/RemediationsPage';
 import AuditPage from './pages/AuditPage';
+import SettingsPage from './pages/SettingsPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -57,6 +58,7 @@ function AppRoutes() {
         <Route path="nist" element={<NISTPage />} />
         <Route path="remediations" element={<RemediationsPage />} />
         <Route path="audit" element={<AuditPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -117,19 +117,10 @@ function Sidebar({ collapsed, onToggle }) {
 
   const menuItems = [
     { path: '/dashboard', icon: Icons.Dashboard, label: 'Dashboard' },
-    { 
-      icon: Icons.Assessments, 
-      label: 'Assessments',
-      children: [
-        { path: '/assessments', label: 'All Assessments' },
-        { path: '/assessments/new', label: 'New Assessment' }
-      ]
-    },
-    { path: '/risk-register', icon: Icons.Risk, label: 'Risk Register' },
+    { path: '/vendors', icon: Icons.Applications, label: 'Vendors' },
     { path: '/applications', icon: Icons.Applications, label: 'Applications' },
     { path: '/components', icon: Icons.Components, label: 'Components' },
     { path: '/cves', icon: Icons.CVEs, label: 'CVEs' },
-    { path: '/reports', icon: Icons.Reports, label: 'Reports' },
     { path: '/remediations', icon: Icons.Remediations, label: 'Remediations' },
     { path: '/nist', icon: Icons.NIST, label: 'NIST Recommendations' },
     { path: '/audit', icon: Icons.Audit, label: 'Audit Logs' },

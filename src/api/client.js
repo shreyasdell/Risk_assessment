@@ -187,4 +187,17 @@ export const fetchAuditLogs = (params = {}) =>
 export const fetchRecentActivity = (limit = 20) =>
   apiClient.get('/audit-logs/recent', { params: { limit } });
 
+// User Management
+export const getUsers = (params = {}) =>
+  apiClient.get('/auth/users', { params });
+
+export const createUser = (data) =>
+  apiClient.post('/auth/register', data);
+
+export const updateUser = (id, data) =>
+  apiClient.put(`/auth/users/${id}`, data);
+
+export const deleteUser = (id) =>
+  apiClient.delete(`/auth/users/${id}`);
+
 export default apiClient;
