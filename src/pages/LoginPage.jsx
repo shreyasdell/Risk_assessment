@@ -22,7 +22,10 @@ function LoginPage() {
       const response = await loginUser({ username, password });
       const { access_token } = response.data;
 
-      // Fetch user data after successful login
+      // Save token first
+      localStorage.setItem('access_token', access_token);
+
+      // Then fetch user data using the token
       const userResponse = await getCurrentUser();
       login(access_token, userResponse.data);
       navigate('/dashboard');
