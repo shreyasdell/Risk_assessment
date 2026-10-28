@@ -122,12 +122,11 @@ function VendorsPage() {
                   <td style={{ padding: '12px 16px', color: '#606060' }}>{vendor.country || '—'}</td>
                   <td style={{ padding: '12px 16px' }}>
                     {vendor.tier ? (
-                      <span style={{ 
-                        padding: '2px 8px', 
-                        borderRadius: '4px', 
-                        fontSize: '12px', 
-                        fontWeight: 500, 
-                        textTransform: 'uppercase',
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 500,
                         backgroundColor: vendor.tier === 'Critical' ? '#FDE8E8' : vendor.tier === 'High' ? '#FECACA' : vendor.tier === 'Medium' ? '#FEF9C3' : '#DCFCE7',
                         color: vendor.tier === 'Critical' ? '#D13438' : vendor.tier === 'High' ? '#DC2626' : vendor.tier === 'Medium' ? '#EAB308' : '#22C55E'
                       }}>
@@ -266,16 +265,15 @@ function VendorsPage() {
                       <tr key={app.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
                         <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{app.name}</td>
                         <td style={{ padding: '12px 16px' }}>
-                          <span style={{ 
-                            padding: '2px 8px', 
-                            borderRadius: '4px', 
-                            fontSize: '12px', 
-                            fontWeight: 500, 
-                            textTransform: 'uppercase',
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: 500,
                             backgroundColor: app.criticality === 'critical' ? '#FDE8E8' : app.criticality === 'high' ? '#FFF4E5' : '#E6F4EA',
                             color: app.criticality === 'critical' ? '#D13438' : app.criticality === 'high' ? '#F4B400' : '#107C10'
                           }}>
-                            {app.criticality || '—'}
+                            {app.criticality ? app.criticality.charAt(0).toUpperCase() + app.criticality.slice(1).toLowerCase() : '—'}
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px', color: '#606060' }}>{app.environment || '—'}</td>

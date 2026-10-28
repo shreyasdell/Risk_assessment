@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchRemediations, createRemediation, updateRemediation, deleteRemediation } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useAuth } from '../context/AuthContext';
 
 function RemediationsPage() {
   const [remediations, setRemediations] = useState([]);
@@ -8,12 +9,23 @@ function RemediationsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingRemediation, setEditingRemediation] = useState(null);
   const [formData, setFormData] = useState({ title: '', description: '', status: 'open', priority: 'medium', assigned_to: '', target_date: '', cve_id: '', component_id: '' });
+  const { canWrite, canDelete } = useAuth();
 
   useEffect(() => { loadRemediations(); }, []);
 
   const loadRemediations = async () => { try { const response = await fetchRemediations(); setRemediations(response.data); } catch (err) { console.error(err); } finally { setLoading(false); } };
 
-  const handleDelete = async (id) => { if (window.confirm('Delete this remediation?')) { try { await deleteRemediation(id); loadRemediations(); } catch (err) { console.error(err); } } };
+  const handleDelete = async (id) => {
+    if (window.confirm('Delete this remediation? This action cannot be undone.')) {
+      try {
+        await deleteRemediation(id);
+        loadRemediations();
+      } catch (err) {
+        console.error(err);
+        alert('Failed to delete remediation');
+      }
+    }
+  };
   const handleCreate = () => { setEditingRemediation(null); setFormData({ title: '', description: '', status: 'open', priority: 'medium', assigned_to: '', target_date: '', cve_id: '', component_id: '' }); setShowModal(true); };
   const handleEdit = (rem) => { setEditingRemediation(rem); setFormData({ title: rem.title, description: rem.description || '', status: rem.status || 'open', priority: rem.priority || 'medium', assigned_to: rem.assigned_to || '', target_date: rem.target_date || '', cve_id: rem.cve_id || '', component_id: rem.component_id || '' }); setShowModal(true); };
   const handleSubmit = async (e) => { e.preventDefault(); try { if (editingRemediation) await updateRemediation(editingRemediation.id, formData); else await createRemediation(formData); setShowModal(false); loadRemediations(); } catch (err) { console.error(err); alert('Failed'); } };
@@ -46,13 +58,17 @@ function RemediationsPage() {
             {remediations.length === 0 ? <tr><td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#606060' }}>No remediations found</td></tr> : remediations.map((rem) => (
               <tr key={rem.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
                 <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{rem.title}</td>
-                <td style={{ padding: '12px 16px' }}><span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', backgroundColor: rem.status === 'completed' ? '#E6F4EA' : rem.status === 'in_progress' ? '#E5F3FF' : '#FFF4E5', color: rem.status === 'completed' ? '#107C10' : rem.status === 'in_progress' ? '#0076CE' : '#F4B400' }}>{rem.status}</span></td>
-                <td style={{ padding: '12px 16px' }}><span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', backgroundColor: rem.priority === 'critical' ? '#FDE8E8' : rem.priority === 'high' ? '#FFF4E5' : '#E6F4EA', color: rem.priority === 'critical' ? '#D13438' : rem.priority === 'high' ? '#F4B400' : '#107C10' }}>{rem.priority}</span></td>
+                <td style={{ padding: '12px 16px' }}><span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, backgroundColor: rem.status === 'completed' ? '#E6F4EA' : rem.status === 'in_progress' ? '#E5F3FF' : '#FFF4E5', color: rem.status === 'completed' ? '#107C10' : rem.status === 'in_progress' ? '#0076CE' : '#F4B400' }}>{rem.status ? rem.status.charAt(0).toUpperCase() + rem.status.slice(1).toLowerCase() : '—'}</span></td>
+                <td style={{ padding: '12px 16px' }}><span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, backgroundColor: rem.priority === 'critical' ? '#FDE8E8' : rem.priority === 'high' ? '#FFF4E5' : '#E6F4EA', color: rem.priority === 'critical' ? '#D13438' : rem.priority === 'high' ? '#F4B400' : '#107C10' }}>{rem.priority ? rem.priority.charAt(0).toUpperCase() + rem.priority.slice(1).toLowerCase() : '—'}</span></td>
                 <td style={{ padding: '12px 16px', color: '#606060' }}>{rem.assigned_to || '—'}</td>
                 <td style={{ padding: '12px 16px', color: '#606060' }}>{rem.target_date || '—'}</td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <button onClick={() => handleEdit(rem)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '16px' }}>Edit</button>
-                  <button onClick={() => handleDelete(rem.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
+                  {canWrite && (
+                    <button onClick={() => handleEdit(rem)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '16px' }}>Edit</button>
+                  )}
+                  {canDelete && (
+                    <button onClick={() => handleDelete(rem.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
+                  )}
                 </td>
               </tr>
             ))}
