@@ -20,8 +20,8 @@ def upgrade():
     # Add role column to users table with uppercase enum values
     op.execute("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'VIEWER'")
     
-    # Set existing admin users to admin role
-    op.execute("UPDATE users SET role = 'ADMIN' WHERE is_admin = 1")
+    # Set existing admin users to admin role (PostgreSQL-compatible boolean comparison)
+    op.execute("UPDATE users SET role = 'ADMIN' WHERE is_admin = TRUE")
 
 
 def downgrade():
