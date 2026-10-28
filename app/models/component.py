@@ -21,7 +21,7 @@ class Component(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    application = relationship("Application", backref="components")
+    application = relationship("Application", back_populates="components")
     cves = relationship("CVE", secondary="component_cve", back_populates="components")
     remediations = relationship(
         "Remediation",
