@@ -15,7 +15,7 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
-    role: Optional[UserRole] = None
+    role: Optional[str] = None  # Changed from Enum to String
     is_active: Optional[bool] = None
     is_admin: Optional[bool] = None  # Deprecated, kept for backward compatibility
 
