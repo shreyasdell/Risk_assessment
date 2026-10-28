@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { fetchNISTRecommendations, createNISTRecommendation } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useAuth } from '../context/AuthContext';
 
 function NISTPage() {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ cwe_id: '', cwe_name: '', nist_category: '', nist_function: '', recommendation: '', detailed_guidance: '' });
+  const { canWrite } = useAuth();
 
   useEffect(() => { loadRecommendations(); }, []);
 
@@ -30,7 +32,9 @@ function NISTPage() {
           <h1 style={{ fontSize: '24px', fontWeight: 600, color: '#202020', margin: '0 0 8px 0' }}>NIST Recommendations</h1>
  <p style={{ fontSize: '14px', color: '#606060', margin: 0 }}>Security recommendations mapped to CWE weaknesses</p>
         </div>
-        <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Add Recommendation</button>
+        {canWrite && (
+          <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Add Recommendation</button>
+        )}
       </div>
 
       <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
