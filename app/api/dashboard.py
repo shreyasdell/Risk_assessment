@@ -24,7 +24,8 @@ from app.services.dashboard_service import (
     get_top_applications,
     get_recent_activity,
     get_vendor_dashboard,
-    get_application_dashboard
+    get_application_dashboard,
+    refresh_component_count
 )
 from app.auth.dependencies import get_current_active_user
 from app.models.user import User
@@ -137,3 +138,13 @@ def get_application_dashboard_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+@router.get("/refresh-component-count")
+def refresh_component_count_endpoint(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Refresh and return the current component count"""
+    count = refresh_component_count(db)
+    return {"total_components": count}

@@ -48,6 +48,15 @@ def get_dashboard_summary(db: Session) -> DashboardSummary:
     )
 
 
+def refresh_component_count(db: Session) -> int:
+    """
+    Refresh and return the current component count.
+    This function ensures a fresh count from the database.
+    """
+    total_components = db.query(func.count(Component.id)).scalar() or 0
+    return total_components
+
+
 def get_criticality_distribution(db: Session) -> List[CriticalityDistribution]:
     """Get distribution of applications by criticality"""
     
