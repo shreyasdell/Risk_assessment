@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { loginUser } from '../api/client';
+import { loginUser, getCurrentUser } from '../api/client';
 import dellLogo from '../assets/newlogo.png';
 
 function LoginPage() {
@@ -22,7 +22,9 @@ function LoginPage() {
       const response = await loginUser({ username, password });
       const { access_token } = response.data;
 
-      login(access_token, { username });
+      // Fetch user data after successful login
+      const userResponse = await getCurrentUser();
+      login(access_token, userResponse.data);
       navigate('/dashboard');
     } catch (err) {
       console.error('Login error:', err);
@@ -72,7 +74,7 @@ function LoginPage() {
             src={dellLogo}
             alt="Dell Logo"
             style={{
-              width: '80px',
+              width: '150px',
               height: 'auto',
               margin: '0 auto 16px',
               display: 'block'
