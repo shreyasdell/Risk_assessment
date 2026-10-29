@@ -46,7 +46,7 @@ def create_cves_bulk_endpoint(
     return create_cves_bulk(db=db, cves=cves)
 
 
-@router.get("/")
+@router.get("/", response_model=List[CVEResponse])
 def read_cves(
     skip: int = 0,
     limit: int = 100,
@@ -55,8 +55,7 @@ def read_cves(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    cves, total = get_cves(db, skip=skip, limit=limit, severity=severity, min_cvss=min_cvss)
-    return {"data": cves, "total": total}
+    return get_cves(db, skip=skip, limit=limit, severity=severity, min_cvss=min_cvss)
 
 
 @router.get("/{cve_id}", response_model=CVEResponse)

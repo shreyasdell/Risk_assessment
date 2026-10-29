@@ -27,7 +27,7 @@ def create_component_endpoint(
     return create_component(db=db, component=component)
 
 
-@router.get("/")
+@router.get("/", response_model=List[ComponentResponse])
 def read_components(
     skip: int = 0,
     limit: int = 100,
@@ -36,8 +36,8 @@ def read_components(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    components, total = get_components(db, skip=skip, limit=limit, application_id=application_id, sbom_id=sbom_id)
-    return {"data": components, "total": total}
+    components = get_components(db, skip=skip, limit=limit, application_id=application_id, sbom_id=sbom_id)
+    return components
 
 
 @router.get("/{component_id}", response_model=ComponentResponse)

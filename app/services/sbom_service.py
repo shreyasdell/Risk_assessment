@@ -65,5 +65,4 @@ def process_sbom_upload(
 def get_sbom_components(db: Session, sbom_id: str) -> List:
     """Get all components for a specific SBOM upload"""
     from app.services.component_service import get_components
-    components, _ = get_components(db, sbom_id=sbom_id)
-    return components
+    return get_components(db, sbom_id=sbom_id)
