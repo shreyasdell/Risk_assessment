@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Tuple
+from sqlalchemy import func
 from app.models.component import Component
 from app.schemas.component import ComponentCreate, ComponentUpdate
 
@@ -14,13 +15,20 @@ def get_components(
     limit: int = 100,
     application_id: Optional[int] = None,
     sbom_id: Optional[str] = None
-) -> List[Component]:
+) -> Tuple[List[Component], int]:
     query = db.query(Component)
     if application_id:
         query = query.filter(Component.application_id == application_id)
     if sbom_id:
         query = query.filter(Component.sbom_id == sbom_id)
-    return query.offset(skip).limit(limit).all()
+    
+    # Get total count before pagination
+    total = query.count()
+    
+    # Apply pagination
+    components = query.offset(skip).limit(limit).all()
+    
+    return components, total
 
 
 def get_component_by_purl(db: Session, purl: str) -> Optional[Component]:
