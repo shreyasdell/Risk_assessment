@@ -99,13 +99,13 @@ class NVDService:
         if version:
             queries.append({
                 "keywordSearch": f"{clean_name} {version}",
-                "resultsPerPage": 50,
+                "resultsPerPage": 1000,
             })
 
         # Strategy 2: Just the name, no version
         queries.append({
             "keywordSearch": clean_name,
-            "resultsPerPage": 50,
+            "resultsPerPage": 1000,
         })
 
         # Strategy 3: Try with common vendor prefixes
@@ -126,11 +126,11 @@ class NVDService:
                 if version:
                     queries.append({
                         "keywordSearch": f"{expanded} {version}",
-                        "resultsPerPage": 50,
+                        "resultsPerPage": 1000,
                     })
                 queries.append({
                     "keywordSearch": expanded,
-                    "resultsPerPage": 50,
+                    "resultsPerPage": 1000,
                 })
                 break
 

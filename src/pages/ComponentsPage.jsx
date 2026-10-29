@@ -12,6 +12,8 @@ function ComponentsPage() {
   const [syncingCVEs, setSyncingCVEs] = useState({});
   const [showCVEsModal, setShowCVEsModal] = useState(false);
   const [selectedComponentCVEs, setSelectedComponentCVEs] = useState(null);
+  const [cveCurrentPage, setCveCurrentPage] = useState(1);
+  const [cvePageSize] = useState(50);
   const [selectedApplication, setSelectedApplication] = useState('');
   const [formData, setFormData] = useState({ name: '', version: '', component_type: 'library', purl: '', supplier: '', description: '', license: '', application_id: '' });
   const [currentPage, setCurrentPage] = useState(1);
@@ -73,7 +75,17 @@ function ComponentsPage() {
   const handleEdit = (component) => { setEditingComponent(component); setFormData({ name: component.name, version: component.version || '', component_type: component.component_type || 'library', purl: component.purl || '', supplier: component.supplier || '', description: component.description || '', license: component.license || '', application_id: component.application_id || '' }); setShowModal(true); };
   const handleSubmit = async (e) => { e.preventDefault(); try { if (editingComponent) await updateComponent(editingComponent.id, formData); else await createComponent(formData); setShowModal(false); loadComponents(); } catch (err) { console.error(err); alert('Failed'); } };
   const handleSyncCVEs = async (componentId) => { setSyncingCVEs(prev => ({ ...prev, [componentId]: true })); try { await syncCVEs(componentId); alert('CVEs synced'); loadComponents(); } catch (err) { console.error(err); alert('Failed'); } finally { setSyncingCVEs(prev => ({ ...prev, [componentId]: false })); } };
-  const handleViewCVEs = async (componentId) => { try { const response = await fetchLinkedCVEs(componentId); setSelectedComponentCVEs(response.data); setShowCVEsModal(true); } catch (err) { console.error(err); alert('Failed'); } };
+  const handleViewCVEs = async (componentId) => { 
+    setCveCurrentPage(1); // Reset to first page
+    try { 
+      const response = await fetchLinkedCVEs(componentId); 
+      setSelectedComponentCVEs(response.data); 
+      setShowCVEsModal(true); 
+    } catch (err) { 
+      console.error(err); 
+      alert('Failed'); 
+    } 
+  };
 
   if (loading) return <LoadingSpinner />;
 
@@ -241,7 +253,9 @@ function ComponentsPage() {
             </div>
             <div style={{ padding: '24px' }}>
               <p style={{ color: '#606060', marginBottom: '16px' }}>Total CVEs: {selectedComponentCVEs.total_cves}</p>
-              {selectedComponentCVEs.cves.length === 0 ? <p style={{ color: '#606060', textAlign: 'center', padding: '40px' }}>No CVEs found</p> : selectedComponentCVEs.cves.map((cve) => (
+              {selectedComponentCVEs.cves.length === 0 ? <p style={{ color: '#606060', textAlign: 'center', padding: '40px' }}>No CVEs found</p> : selectedComponentCVEs.cves
+                .slice((cveCurrentPage - 1) * cvePageSize, cveCurrentPage * cvePageSize)
+                .map((cve) => (
                 <div key={cve.id} style={{ backgroundColor: '#F7F8FA', padding: '16px', borderRadius: '4px', marginBottom: '12px', border: '1px solid #E5E5E5' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                     <a
@@ -260,6 +274,80 @@ function ComponentsPage() {
                   <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#606060' }}><span>CVSS: {cve.cvss_score}</span><span>Exploit: {cve.exploit_available ? 'Yes' : 'No'}</span><span>Patch: {cve.patch_available ? 'Yes' : 'No'}</span></div>
                 </div>
               ))}
+              
+              {/* CVE Pagination */}
+              {selectedComponentCVEs.cves.length > cvePageSize && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #E5E5E5' }}>
+                  <div style={{ fontSize: '13px', color: '#606060' }}>
+                    Showing {((cveCurrentPage - 1) * cvePageSize) + 1} to {Math.min(cveCurrentPage * cvePageSize, selectedComponentCVEs.cves.length)} of {selectedComponentCVEs.cves.length} CVEs
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => setCveCurrentPage(1)}
+                      disabled={cveCurrentPage === 1}
+                      style={{
+                        padding: '6px 12px',
+                        border: '1px solid #D9D9D9',
+                        backgroundColor: cveCurrentPage === 1 ? '#F5F5F5' : '#FFFFFF',
+                        color: cveCurrentPage === 1 ? '#A0A0A0' : '#202020',
+                        borderRadius: '4px',
+                        cursor: cveCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                        fontSize: '13px'
+                      }}
+                    >
+                      First
+                    </button>
+                    <button
+                      onClick={() => setCveCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={cveCurrentPage === 1}
+                      style={{
+                        padding: '6px 12px',
+                        border: '1px solid #D9D9D9',
+                        backgroundColor: cveCurrentPage === 1 ? '#F5F5F5' : '#FFFFFF',
+                        color: cveCurrentPage === 1 ? '#A0A0A0' : '#202020',
+                        borderRadius: '4px',
+                        cursor: cveCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                        fontSize: '13px'
+                      }}
+                    >
+                      Previous
+                    </button>
+                    <span style={{ padding: '6px 12px', fontSize: '13px', color: '#606060' }}>
+                      Page {cveCurrentPage} of {Math.ceil(selectedComponentCVEs.cves.length / cvePageSize)}
+                    </span>
+                    <button
+                      onClick={() => setCveCurrentPage(prev => Math.min(Math.ceil(selectedComponentCVEs.cves.length / cvePageSize), prev + 1))}
+                      disabled={cveCurrentPage >= Math.ceil(selectedComponentCVEs.cves.length / cvePageSize)}
+                      style={{
+                        padding: '6px 12px',
+                        border: '1px solid #D9D9D9',
+                        backgroundColor: cveCurrentPage >= Math.ceil(selectedComponentCVEs.cves.length / cvePageSize) ? '#F5F5F5' : '#FFFFFF',
+                        color: cveCurrentPage >= Math.ceil(selectedComponentCVEs.cves.length / cvePageSize) ? '#A0A0A0' : '#202020',
+                        borderRadius: '4px',
+                        cursor: cveCurrentPage >= Math.ceil(selectedComponentCVEs.cves.length / cvePageSize) ? 'not-allowed' : 'pointer',
+                        fontSize: '13px'
+                      }}
+                    >
+                      Next
+                    </button>
+                    <button
+                      onClick={() => setCveCurrentPage(Math.ceil(selectedComponentCVEs.cves.length / cvePageSize))}
+                      disabled={cveCurrentPage >= Math.ceil(selectedComponentCVEs.cves.length / cvePageSize)}
+                      style={{
+                        padding: '6px 12px',
+                        border: '1px solid #D9D9D9',
+                        backgroundColor: cveCurrentPage >= Math.ceil(selectedComponentCVEs.cves.length / cvePageSize) ? '#F5F5F5' : '#FFFFFF',
+                        color: cveCurrentPage >= Math.ceil(selectedComponentCVEs.cves.length / cvePageSize) ? '#A0A0A0' : '#202020',
+                        borderRadius: '4px',
+                        cursor: cveCurrentPage >= Math.ceil(selectedComponentCVEs.cves.length / cvePageSize) ? 'not-allowed' : 'pointer',
+                        fontSize: '13px'
+                      }}
+                    >
+                      Last
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
