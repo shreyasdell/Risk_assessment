@@ -243,7 +243,19 @@ function ComponentsPage() {
               <p style={{ color: '#606060', marginBottom: '16px' }}>Total CVEs: {selectedComponentCVEs.total_cves}</p>
               {selectedComponentCVEs.cves.length === 0 ? <p style={{ color: '#606060', textAlign: 'center', padding: '40px' }}>No CVEs found</p> : selectedComponentCVEs.cves.map((cve) => (
                 <div key={cve.id} style={{ backgroundColor: '#F7F8FA', padding: '16px', borderRadius: '4px', marginBottom: '12px', border: '1px solid #E5E5E5' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}><span style={{ fontWeight: 500, color: '#202020' }}>{cve.cve_id}</span><span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', backgroundColor: cve.severity === 'critical' ? '#FDE8E8' : cve.severity === 'high' ? '#FFF4E5' : '#E6F4EA', color: cve.severity === 'critical' ? '#D13438' : cve.severity === 'high' ? '#F4B400' : '#107C10' }}>{cve.severity}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <a
+                      href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontWeight: 500, color: '#0076CE', textDecoration: 'none' }}
+                      onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+                      onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
+                    >
+                      {cve.cve_id}
+                    </a>
+                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', backgroundColor: cve.severity === 'critical' ? '#FDE8E8' : cve.severity === 'high' ? '#FFF4E5' : '#E6F4EA', color: cve.severity === 'critical' ? '#D13438' : cve.severity === 'high' ? '#F4B400' : '#107C10' }}>{cve.severity}</span>
+                  </div>
                   <p style={{ color: '#606060', fontSize: '13px', marginBottom: '8px' }}>{cve.description}</p>
                   <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#606060' }}><span>CVSS: {cve.cvss_score}</span><span>Exploit: {cve.exploit_available ? 'Yes' : 'No'}</span><span>Patch: {cve.patch_available ? 'Yes' : 'No'}</span></div>
                 </div>
