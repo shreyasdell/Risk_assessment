@@ -26,124 +26,6 @@ from app.models.cve import CVE
 from app.models.component import Component
 
 
-# Generic Name Blocklist
-GENERIC_NAME_BLOCKLIST = {
-    "make", "patch", "file", "time", "test", "date",
-    "cal", "at", "bc", "dc", "diff", "find", "sort",
-    "split", "strings", "su", "tar", "top", "tr",
-    "tree", "true", "false", "yes", "more", "less",
-    "man", "nice", "link", "unlink", "head", "tail",
-    "cut", "join", "fold", "fmt", "pr", "env", "id",
-    "who", "w", "last", "look", "spell", "units",
-    "factor", "seq", "shuf", "paste", "comm", "expand",
-    "base", "core", "common", "commons", "util", "utils",
-    "config", "log", "logger", "logging", "cache",
-    "crypto", "ssl", "tls", "net", "http", "dns",
-    "db", "sql", "json", "xml", "yaml", "csv",
-    "io", "os", "sys", "math", "random", "re",
-    "async", "sync", "promise", "promises", "events",
-    "stream", "buffer", "string", "array", "list",
-    "map", "set", "queue", "stack", "tree", "graph",
-    "proxy", "server", "client", "socket", "pipe",
-    "lock", "mutex", "signal", "token", "key",
-    "color", "debug", "error", "info", "warn",
-    "busybox", "musl", "scanelf", "ssl_client",
-    "alpine-baselayout", "alpine-baselayout-data",
-    "alpine-keys", "apk-tools", "ca-certificates",
-    "ca-certificates-bundle", "libc-utils",
-}
-
-# Known CPE Vendor Mappings
-KNOWN_CPE_VENDORS = {
-    "make": "gnu",
-    "patch": "gnu",
-    "tar": "gnu",
-    "gzip": "gnu",
-    "grep": "gnu",
-    "sed": "gnu",
-    "awk": "gnu",
-    "bash": "gnu",
-    "coreutils": "gnu",
-    "binutils": "gnu",
-    "gcc": "gnu",
-    "gdb": "gnu",
-    "glibc": "gnu",
-    "libc": "gnu",
-    "readline": "gnu",
-    "ncurses": "gnu",
-    "diffutils": "gnu",
-    "findutils": "gnu",
-    "wget": "gnu",
-    "openssl": "openssl",
-    "libssl": "openssl",
-    "curl": "haxx",
-    "libcurl": "haxx",
-    "zlib": "zlib",
-    "libxml2": "xmlsoft",
-    "libxslt": "xmlsoft",
-    "sqlite": "sqlite",
-    "libsqlite3": "sqlite",
-    "pcre": "pcre",
-    "pcre2": "pcre",
-    "expat": "libexpat_project",
-    "libexpat": "libexpat_project",
-    "libjpeg": "ijg",
-    "libpng": "libpng",
-    "libtiff": "libtiff",
-    "freetype": "freetype",
-    "fontconfig": "fontconfig_project",
-    "icu": "icu-project",
-    "bzip2": "bzip",
-    "xz": "tukaani",
-    "lz4": "lz4_project",
-    "zstd": "facebook",
-    "libarchive": "libarchive",
-    "libevent": "libevent_project",
-    "libffi": "sourceware",
-    "gmp": "gmplib",
-    "nettle": "nettle_project",
-    "gnutls": "gnu",
-    "libssh2": "libssh2",
-    "nghttp2": "nghttp2",
-    "libev": "libev_project",
-    "libuv": "libuv_project",
-    "python3": "python",
-    "python": "python",
-    "python2": "python",
-    "ruby": "ruby-lang",
-    "perl": "perl",
-    "php": "php",
-    "node": "nodejs",
-    "nodejs": "nodejs",
-    "go": "golang",
-    "java": "oracle",
-    "openjdk": "oracle",
-    "nginx": "f5",
-    "apache": "apache",
-    "httpd": "apache",
-    "tomcat": "apache",
-    "redis": "redis",
-    "postgresql": "postgresql",
-    "mysql": "oracle",
-    "mariadb": "mariadb",
-    "mongodb": "mongodb",
-    "git": "git-scm",
-    "docker": "docker",
-    "containerd": "linuxfoundation",
-    "runc": "linuxfoundation",
-    "libgcc": "gnu",
-    "libstdc++": "gnu",
-    "musl": "musl-libc",
-    "busybox": "busybox",
-    "e2fsprogs": "e2fsprogs_project",
-    "util-linux": "kernel",
-    "shadow": "vmware",
-    "sudo": "sudo_project",
-    "openssh": "openbsd",
-    "krb5": "mit",
-}
-
-
 class NVDService:
 
     BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
@@ -185,10 +67,15 @@ class NVDService:
     def _clean_component_name(self, name: str) -> str:
         """
         Clean component name for better NVD matching.
-        Removes Alpine Linux package suffixes (e.g., -r2, -r5, -r10)
+
+        Examples:
+          'log4j-core'      -> 'log4j'
+          'jackson-databind' -> 'jackson-databind'
+          'spring-boot'     -> 'spring boot'
+          'commons-text'    -> 'commons-text'
         """
-        # Remove Alpine Linux package suffixes
-        cleaned = re.sub(r'-r\d+$', '', name.lower().strip())
+        # Remove common suffixes that NVD might not use
+        cleaned = name.lower().strip()
         return cleaned
 
     def _generate_search_queries(
@@ -196,27 +83,56 @@ class NVDService:
         name: str,
         version: str = None
     ) -> List[Dict]:
-        """Generate search queries with vendor mapping."""
+        """
+        Generate multiple search query strategies.
+        We try them in order until one returns results.
+
+        Why multiple strategies?
+        NVD indexes things inconsistently:
+        - "log4j" vs "log4j-core" vs "apache log4j"
+        - "jackson-databind" vs "jackson databind"
+        """
         queries = []
         clean_name = self._clean_component_name(name)
-        clean_version = re.sub(r'-r\d+$', '', version) if version else None
 
-        # Check if name is in blocklist - skip keyword search
-        if clean_name in GENERIC_NAME_BLOCKLIST:
-            return []
-
-        # Strategy 1: Name + version
-        if clean_version:
+        # Strategy 1: Name + version, no exact match
+        if version:
             queries.append({
-                "keywordSearch": f"{clean_name} {clean_version}",
+                "keywordSearch": f"{clean_name} {version}",
                 "resultsPerPage": 50,
             })
 
-        # Strategy 2: Just the name
+        # Strategy 2: Just the name, no version
         queries.append({
             "keywordSearch": clean_name,
             "resultsPerPage": 50,
         })
+
+        # Strategy 3: Try with common vendor prefixes
+        vendor_prefixes = {
+            "log4j": "apache log4j",
+            "commons": "apache commons",
+            "spring": "spring framework",
+            "jackson": "fasterxml jackson",
+            "openssl": "openssl",
+            "tomcat": "apache tomcat",
+            "struts": "apache struts",
+            "nginx": "nginx",
+            "jquery": "jquery",
+        }
+
+        for prefix, expanded in vendor_prefixes.items():
+            if prefix in clean_name:
+                if version:
+                    queries.append({
+                        "keywordSearch": f"{expanded} {version}",
+                        "resultsPerPage": 50,
+                    })
+                queries.append({
+                    "keywordSearch": expanded,
+                    "resultsPerPage": 50,
+                })
+                break
 
         return queries
 
@@ -297,92 +213,63 @@ class NVDService:
         component_version: str = None,
         cpe: str = None
     ) -> List[Dict]:
-        """Search NVD for CVEs with improved filtering."""
-        clean_name = self._clean_component_name(component_name)
-        clean_version = re.sub(r'-r\d+$', '', component_version) if component_version else None
+        """
+        Search NVD for CVEs affecting a component.
 
-        # Strategy 0: Use or generate CPE if available
+        Search strategy (in order):
+        1. CPE string (most accurate, if available)
+        2. Name + version keyword search
+        3. Name-only keyword search
+        4. Expanded name keyword search
+
+        Stops at the first strategy that returns results.
+        """
+
+        # Strategy 0: Use CPE if available
         if cpe:
-            # Try to correct vendor in CPE
-            cpe_parts = cpe.split(':')
-            if len(cpe_parts) >= 3:
-                vendor = cpe_parts[3].lower()
-                if vendor in KNOWN_CPE_VENDORS:
-                    corrected_cpe = cpe.replace(f':{vendor}:', f':{KNOWN_CPE_VENDORS[vendor]}:')
-                    print(f"[NVD] Corrected CPE: {corrected_cpe}")
-                    data = await self._make_request({
-                        "cpeName": corrected_cpe,
-                        "resultsPerPage": 100,
-                    })
-                    if data and data.get("totalResults", 0) > 0:
-                        return self._parse_nvd_response(data)
+            print(f"[NVD] Trying CPE: {cpe}")
+            data = await self._make_request({
+                "cpeName": cpe,
+                "resultsPerPage": 100,
+            })
+            if data:
+                results = self._parse_nvd_response(data)
+                if results:
+                    return self._filter_by_version(
+                        results, component_version
+                    )
 
-        # Generate keyword queries (returns empty if name is blocklisted)
-        queries = self._generate_search_queries(component_name, component_version)
+        # Generate and try multiple keyword strategies
+        queries = self._generate_search_queries(
+            component_name, component_version
+        )
 
         for query_params in queries:
             data = await self._make_request(query_params)
 
             if data and data.get("totalResults", 0) > 0:
-                # Skip if too many results (likely false positives)
-                if data.get("totalResults", 0) > 500:
-                    print(f"[NVD] Skipping {data['totalResults']} results - too many false positives")
-                    continue
-
                 results = self._parse_nvd_response(data)
+
                 if results:
-                    filtered = self._filter_relevant_cves_strict(
+                    # Filter results to improve relevance
+                    filtered = self._filter_relevant_cves(
                         results,
-                        clean_name,
-                        clean_version
+                        component_name,
+                        component_version
                     )
+
                     if filtered:
+                        print(
+                            f"[NVD] Returning {len(filtered)} "
+                            f"relevant CVEs"
+                        )
                         return filtered
 
-        print(f"[NVD] No CVEs found for {component_name} {component_version or ''}")
+        print(
+            f"[NVD] No CVEs found for "
+            f"{component_name} {component_version or ''}"
+        )
         return []
-
-    def _filter_relevant_cves_strict(
-        self,
-        cves: List[Dict],
-        component_name: str,
-        component_version: str = None
-    ) -> List[Dict]:
-        """Strict filtering to prevent false positives."""
-        if not cves:
-            return []
-
-        clean_name = component_name.lower().strip()
-        relevant = []
-
-        for cve in cves:
-            desc = (cve.get("description") or "").lower()
-            refs = cve.get("references", [])
-            score = 0
-
-            # Check references (more reliable)
-            ref_urls = [ref.get("url", "").lower() for ref in refs]
-            if any(clean_name in url for url in ref_urls):
-                score += 3
-
-            # Check description with word boundary matching
-            pattern = r'\b' + re.escape(clean_name) + r'\b'
-            if re.search(pattern, desc):
-                # Check for software-related context
-                software_keywords = ["version", "vulnerability", "affected", "allows", "buffer", "overflow", "injection"]
-                if any(kw in desc for kw in software_keywords):
-                    score += 2
-
-            # Check version
-            if component_version and score > 0:
-                clean_ver = re.sub(r'-r\d+$', '', component_version)
-                if clean_ver in desc:
-                    score += 1
-
-            if score >= 2:
-                relevant.append(cve)
-
-        return relevant
 
     def _filter_relevant_cves(
         self,
@@ -390,8 +277,42 @@ class NVDService:
         component_name: str,
         component_version: str = None
     ) -> List[Dict]:
-        """Fallback filtering (deprecated, use _filter_relevant_cves_strict)."""
-        return self._filter_relevant_cves_strict(cves, component_name, component_version)
+        """
+        Filter NVD results to only include CVEs that
+        actually mention our component.
+
+        Why?
+        Keyword search can return unrelated results.
+        e.g., searching "react" might return CVEs for
+        "nuclear reactor" software.
+        """
+        clean_name = self._clean_component_name(component_name)
+        name_parts = clean_name.replace("-", " ").split()
+
+        relevant = []
+        for cve in cves:
+            desc = cve.get("description", "").lower()
+            cve_id = cve.get("cve_id", "")
+
+            # Check if description mentions the component
+            # At least one significant part of the name
+            # must appear
+            name_found = False
+            for part in name_parts:
+                if len(part) >= 3 and part in desc:
+                    name_found = True
+                    break
+
+            # Also check the CVE references (list of URLs)
+            refs = cve.get("references", [])
+            if not name_found and refs:
+                if any(clean_name in ref.get("url", "").lower() for ref in refs):
+                    name_found = True
+
+            if name_found:
+                relevant.append(cve)
+
+        return relevant
 
     def _filter_by_version(
         self,
