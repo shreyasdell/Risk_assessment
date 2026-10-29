@@ -86,7 +86,18 @@ function CVEsPage() {
             ) : (
               cves.map((cve) => (
                 <tr key={cve.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
-                  <td style={{ padding: '12px 16px', color: '#0076CE', fontWeight: 500 }}>{cve.cve_id}</td>
+                  <td style={{ padding: '12px 16px' }}>
+                    <a
+                      href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: '#0076CE', fontWeight: 500, textDecoration: 'none' }}
+                      onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+                      onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
+                    >
+                      {cve.cve_id}
+                    </a>
+                  </td>
                   <td style={{ padding: '12px 16px', color: '#202020', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cve.description || '—'}</td>
                   <td style={{ padding: '12px 16px', color: '#606060' }}>{cve.cvss_score || '—'}</td>
                   <td style={{ padding: '12px 16px' }}>
