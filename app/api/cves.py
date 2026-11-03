@@ -46,16 +46,23 @@ def create_cves_bulk_endpoint(
     return create_cves_bulk(db=db, cves=cves)
 
 
-@router.get("/", response_model=List[CVEResponse])
+@router.get("/")
 def read_cves(
     skip: int = 0,
     limit: int = 100,
     severity: Optional[str] = Query(None),
     min_cvss: Optional[float] = Query(None),
+    application_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    return get_cves(db, skip=skip, limit=limit, severity=severity, min_cvss=min_cvss)
+    cves, total = get_cves(db, skip=skip, limit=limit, severity=severity, min_cvss=min_cvss, application_id=application_id)
+    return {
+        "data": cves,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
 
 
 @router.get("/{cve_id}", response_model=CVEResponse)
@@ -141,6 +148,63 @@ def sync_cves_for_component(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to sync CVEs: {str(e)}"
         )
+
+
+@router.post("/sync-all", response_model=dict)
+def sync_all_cves(
+    application_id: Optional[int] = Query(None),
+    force_refresh: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Sync CVEs for all components (optionally filtered by application)
+    """
+    from app.models.component import Component
+    from app.services.component_service import get_components
+    
+    # Get components to sync
+    query = db.query(Component)
+    if application_id:
+        query = query.filter(Component.application_id == application_id)
+    
+    components = query.all()
+    
+    if not components:
+        return {"message": "No components found to sync", "total": 0, "processed": 0}
+    
+    results = {
+        "total": len(components),
+        "processed": 0,
+        "failed": 0,
+        "details": []
+    }
+    
+    for component in components:
+        try:
+            print(f"[BULK SYNC] Processing component {component.id}: {component.name} {component.version}")
+            cves = nvd_service.sync_component_cves(db, component)
+            results["processed"] += 1
+            results["details"].append({
+                "component_id": component.id,
+                "name": component.name,
+                "version": component.version,
+                "cves_found": len(cves),
+                "status": "success"
+            })
+            print(f"[BULK SYNC] Completed component {component.id}: {len(cves)} CVEs")
+        except Exception as e:
+            results["failed"] += 1
+            results["details"].append({
+                "component_id": component.id,
+                "name": component.name,
+                "version": component.version,
+                "status": "failed",
+                "error": str(e)
+            })
+            print(f"[BULK SYNC] Failed component {component.id}: {str(e)}")
+    
+    return results
 
 
 @router.post("/link", summary="Link a CVE to a component")

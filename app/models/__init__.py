@@ -7,6 +7,7 @@ from app.models.risk_score import RiskScore
 from app.models.remediation import Remediation, RemediationStatus, RemediationPriority
 from app.models.audit_log import AuditLog
 from app.models.nist_recommendation import NistRecommendation
+from app.models.codebase_upload import CodebaseUpload
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "RemediationPriority",
     "AuditLog",
     "NistRecommendation",
+    "CodebaseUpload",
 ]

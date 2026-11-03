@@ -1,10 +1,11 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, ForeignKey, Table, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+from app.agent.models import CVEAgentMixin
 
 
-class CVE(Base):
+class CVE(Base, CVEAgentMixin):
     __tablename__ = "cves"
 
     id = Column(Integer, primary_key=True, index=True)

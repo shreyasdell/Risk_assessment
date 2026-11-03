@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchComponents, fetchApplications, createComponent, updateComponent, deleteComponent, syncCVEs, fetchLinkedCVEs } from '../api/client';
+import { fetchComponents, fetchApplications, createComponent, updateComponent, deleteComponent, syncCVEs, syncAllCVEs, fetchLinkedCVEs } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,6 +10,7 @@ function ComponentsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingComponent, setEditingComponent] = useState(null);
   const [syncingCVEs, setSyncingCVEs] = useState({});
+  const [bulkSyncing, setBulkSyncing] = useState(false);
   const [showCVEsModal, setShowCVEsModal] = useState(false);
   const [selectedComponentCVEs, setSelectedComponentCVEs] = useState(null);
   const [cveCurrentPage, setCveCurrentPage] = useState(1);
@@ -33,10 +34,27 @@ function ComponentsPage() {
         params.application_id = selectedApplication;
       }
       const response = await fetchComponents(params);
-      setComponents(response.data);
-      setTotalComponents(response.total || response.data.length);
+      console.log('Components API response:', response);
+      
+      // Axios wraps the response, so we need to access response.data
+      const apiData = response.data;
+      
+      // Handle both old format (array) and new format (object with data/total)
+      if (Array.isArray(apiData)) {
+        setComponents(apiData);
+        setTotalComponents(apiData.length);
+      } else if (apiData.data && Array.isArray(apiData.data)) {
+        setComponents(apiData.data);
+        setTotalComponents(apiData.total || apiData.data.length);
+      } else {
+        console.error('Unexpected response format:', apiData);
+        setComponents([]);
+        setTotalComponents(0);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Error loading components:', err);
+      setComponents([]);
+      setTotalComponents(0);
     } finally {
       setLoading(false);
     }
@@ -59,10 +77,22 @@ function ComponentsPage() {
           params.application_id = appId;
         }
         const response = await fetchComponents(params);
-        setComponents(response.data);
-        setTotalComponents(response.total || response.data.length);
+        const apiData = response.data;
+        
+        if (Array.isArray(apiData)) {
+          setComponents(apiData);
+          setTotalComponents(apiData.length);
+        } else if (apiData.data && Array.isArray(apiData.data)) {
+          setComponents(apiData.data);
+          setTotalComponents(apiData.total || apiData.data.length);
+        } else {
+          setComponents([]);
+          setTotalComponents(0);
+        }
       } catch (err) {
         console.error(err);
+        setComponents([]);
+        setTotalComponents(0);
       } finally {
         setLoading(false);
       }
@@ -75,6 +105,23 @@ function ComponentsPage() {
   const handleEdit = (component) => { setEditingComponent(component); setFormData({ name: component.name, version: component.version || '', component_type: component.component_type || 'library', purl: component.purl || '', supplier: component.supplier || '', description: component.description || '', license: component.license || '', application_id: component.application_id || '' }); setShowModal(true); };
   const handleSubmit = async (e) => { e.preventDefault(); try { if (editingComponent) await updateComponent(editingComponent.id, formData); else await createComponent(formData); setShowModal(false); loadComponents(); } catch (err) { console.error(err); alert('Failed'); } };
   const handleSyncCVEs = async (componentId) => { setSyncingCVEs(prev => ({ ...prev, [componentId]: true })); try { await syncCVEs(componentId); alert('CVEs synced'); loadComponents(); } catch (err) { console.error(err); alert('Failed'); } finally { setSyncingCVEs(prev => ({ ...prev, [componentId]: false })); } };
+
+  const handleBulkSyncCVEs = async () => {
+    if (!window.confirm(`Sync CVEs for all components${selectedApplication ? ' in this application' : ''}? This may take several minutes.`)) {
+      return;
+    }
+    setBulkSyncing(true);
+    try {
+      const response = await syncAllCVEs(selectedApplication || null);
+      alert(`Bulk sync completed: ${response.data.processed} succeeded, ${response.data.failed} failed`);
+      loadComponents();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to sync CVEs');
+    } finally {
+      setBulkSyncing(false);
+    }
+  };
   const handleViewCVEs = async (componentId) => { 
     setCveCurrentPage(1); // Reset to first page
     try { 
@@ -107,6 +154,24 @@ function ComponentsPage() {
               <option key={app.id} value={app.id}>{app.name}</option>
             ))}
           </select>
+          {canWrite && (
+            <button 
+              onClick={handleBulkSyncCVEs} 
+              disabled={bulkSyncing}
+              style={{ 
+                backgroundColor: bulkSyncing ? '#64748B' : '#107C10', 
+                color: '#FFFFFF', 
+                border: 'none', 
+                padding: '8px 16px', 
+                borderRadius: '4px', 
+                fontSize: '14px', 
+                fontWeight: 500, 
+                cursor: bulkSyncing ? 'not-allowed' : 'pointer' 
+              }}
+            >
+              {bulkSyncing ? 'Syncing All...' : 'Sync All CVEs'}
+            </button>
+          )}
           {canWrite && (
             <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Add Component</button>
           )}

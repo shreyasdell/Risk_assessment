@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from app.models.cve import CVE
+from app.models.component import Component
 from app.schemas.cve import CVECreate, CVEUpdate
 
 
@@ -17,16 +18,26 @@ def get_cves(
     skip: int = 0,
     limit: int = 100,
     severity: Optional[str] = None,
-    min_cvss: Optional[float] = None
-) -> List[CVE]:
-    query = db.query(CVE)
+    min_cvss: Optional[float] = None,
+    application_id: Optional[int] = None
+) -> Tuple[List[CVE], int]:
+    """Get CVEs with total count for pagination."""
+    query = db.query(CVE).join(CVE.components).join(Component.application)
     
     if severity:
         query = query.filter(CVE.severity == severity)
     if min_cvss is not None:
         query = query.filter(CVE.cvss_score >= min_cvss)
+    if application_id:
+        query = query.filter(Component.application_id == application_id)
     
-    return query.order_by(CVE.cvss_score.desc()).offset(skip).limit(limit).all()
+    # Get total count
+    total = query.count()
+    
+    # Get paginated results
+    cves = query.order_by(CVE.cvss_score.desc()).offset(skip).limit(limit).all()
+    
+    return cves, total
 
 
 def create_cve(db: Session, cve: CVECreate) -> CVE:

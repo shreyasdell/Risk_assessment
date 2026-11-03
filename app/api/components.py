@@ -27,7 +27,7 @@ def create_component_endpoint(
     return create_component(db=db, component=component)
 
 
-@router.get("/", response_model=List[ComponentResponse])
+@router.get("/")
 def read_components(
     skip: int = 0,
     limit: int = 100,
@@ -36,8 +36,13 @@ def read_components(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    components = get_components(db, skip=skip, limit=limit, application_id=application_id, sbom_id=sbom_id)
-    return components
+    components, total = get_components(db, skip=skip, limit=limit, application_id=application_id, sbom_id=sbom_id)
+    return {
+        "data": components,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
 
 
 @router.get("/{component_id}", response_model=ComponentResponse)
@@ -116,6 +121,8 @@ def upload_sbom(
     
     try:
         content_str = content.decode('utf-8')
+        print(f"DEBUG: File content length: {len(content_str)}")
+        print(f"DEBUG: First 500 chars: {content_str[:500]}")
         result = process_sbom_upload(
             db=db,
             content=content_str,
@@ -125,6 +132,9 @@ def upload_sbom(
         )
         return result
     except ValueError as e:
+        print(f"ERROR: ValueError in SBOM processing: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -136,3 +146,4 @@ def upload_sbom(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process SBOM: {str(e)}"
         )
+

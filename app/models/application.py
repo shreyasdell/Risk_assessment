@@ -36,3 +36,8 @@ class Application(Base):
         back_populates="application",
         cascade="all, delete-orphan"
     )
+    codebase_uploads = relationship(
+        "CodebaseUpload",
+        back_populates="application",
+        cascade="all, delete-orphan"
+    )

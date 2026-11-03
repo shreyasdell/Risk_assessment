@@ -7,7 +7,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 600000, // 10 minutes for CVE sync with agent filtering
 });
 
 apiClient.interceptors.request.use(
@@ -92,6 +92,12 @@ export const uploadSBOM = (applicationId, file) => {
   });
 };
 
+export const uploadCodebase = (formData) => {
+  return apiClient.post('/applications/upload-codebase', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
 export const fetchComponents = (params = {}) =>
   apiClient.get('/components', { params });
 
@@ -123,6 +129,11 @@ export const deleteCVE = (id) =>
 export const syncCVEs = (componentId, forceRefresh = false) =>
   apiClient.post(`/cves/sync/${componentId}`, null, {
     params: { force_refresh: forceRefresh }
+  });
+
+export const syncAllCVEs = (applicationId = null, forceRefresh = false) =>
+  apiClient.post('/cves/sync-all', null, {
+    params: { application_id: applicationId, force_refresh: forceRefresh }
   });
 
 export const linkCVEToComponent = (cveId, componentId) =>

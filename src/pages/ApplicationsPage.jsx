@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchApplications, fetchVendors, createApplication, updateApplication, deleteApplication, calculateRiskScore, uploadSBOM, fetchRiskScore } from '../api/client';
+import { fetchApplications, fetchVendors, createApplication, updateApplication, deleteApplication, calculateRiskScore, uploadSBOM, fetchRiskScore, uploadCodebase } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,12 +10,16 @@ function ApplicationsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showSBOMModal, setShowSBOMModal] = useState(false);
+  const [showCodebaseModal, setShowCodebaseModal] = useState(false);
   const [showRiskModal, setShowRiskModal] = useState(false);
   const [selectedRiskDetails, setSelectedRiskDetails] = useState(null);
   const [editingApp, setEditingApp] = useState(null);
   const [selectedAppForSBOM, setSelectedAppForSBOM] = useState(null);
+  const [selectedAppForCodebase, setSelectedAppForCodebase] = useState(null);
   const [sbomFile, setSbomFile] = useState(null);
+  const [codebaseFile, setCodebaseFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingCodebase, setUploadingCodebase] = useState(false);
   const [formData, setFormData] = useState({ name: '', description: '', owner: '', business_unit: '', criticality: 'medium', internet_facing: false, data_classification: 'internal', environment: 'development', vendor_id: '' });
   const { canWrite, canDelete } = useAuth();
 
@@ -41,7 +45,8 @@ function ApplicationsPage() {
         const response = await fetchRiskScore(app.id);
         scores[app.id] = response.data;
       } catch (err) {
-        // No risk score calculated yet
+        // No risk score calculated yet - this is expected
+        // Silently ignore to avoid console noise
       }
     }
     setRiskScores(scores);
@@ -120,6 +125,12 @@ function ApplicationsPage() {
     setSelectedAppForSBOM(app);
     setSbomFile(null);
     setShowSBOMModal(true);
+  };
+
+  const handleOpenCodebaseUpload = (app) => {
+    setSelectedAppForCodebase(app);
+    setCodebaseFile(null);
+    setShowCodebaseModal(true);
   };
 
   const handleFileSelect = (e) => {
@@ -215,6 +226,9 @@ function ApplicationsPage() {
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       {canWrite && (
                         <button onClick={() => handleOpenSBOMUpload(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Upload SBOM</button>
+                      )}
+                      {canWrite && (
+                        <button onClick={() => handleOpenCodebaseUpload(app)} style={{ background: 'none', border: 'none', color: '#0076CE', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Upload Codebase</button>
                       )}
                       {canWrite && (
                         <button onClick={() => handleCalculateRisk(app.id)} style={{ background: 'none', border: 'none', color: '#107C10', cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}>Calculate Risk</button>
@@ -428,6 +442,38 @@ function ApplicationsPage() {
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #E5E5E5' }}>
                 <button onClick={() => setShowRiskModal(false)} style={{ background: '#FFFFFF', color: '#606060', border: '1px solid #D9D9D9', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}>Close</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Codebase Upload Modal */}
+      {showCodebaseModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#FFFFFF', padding: '32px', borderRadius: '8px', width: '500px', maxWidth: '90%' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#202020', margin: '0 0 24px 0' }}>Upload Codebase</h2>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#202020', marginBottom: '8px' }}>Application: {selectedAppForCodebase?.name}</label>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#202020', marginBottom: '8px' }}>ZIP File</label>
+              <input type="file" accept=".zip" onChange={(e) => setCodebaseFile(e.target.files[0])} style={{ width: '100%', padding: '8px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+              <button onClick={() => { setShowCodebaseModal(false); setCodebaseFile(null); }} style={{ background: 'none', border: '1px solid #D9D9D9', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer', color: '#202020' }}>Cancel</button>
+              <button onClick={async () => {
+                if (!codebaseFile) { alert('Please select a ZIP file'); return; }
+                setUploadingCodebase(true);
+                try {
+                  const formData = new FormData();
+                  formData.append('file', codebaseFile);
+                  formData.append('application_id', selectedAppForCodebase.id);
+                  await uploadCodebase(formData);
+                  alert('Codebase uploaded successfully');
+                  setShowCodebaseModal(false);
+                  setCodebaseFile(null);
+                } catch (err) { console.error(err); alert('Failed to upload codebase'); } finally { setUploadingCodebase(false); }
+              }} disabled={uploadingCodebase} style={{ backgroundColor: '#107C10', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: uploadingCodebase ? 'not-allowed' : 'pointer' }}>{uploadingCodebase ? 'Uploading...' : 'Upload'}</button>
             </div>
           </div>
         </div>

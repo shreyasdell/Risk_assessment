@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, Form, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from pathlib import Path
 from app.core.database import get_db
 from app.schemas.application import ApplicationCreate, ApplicationUpdate, ApplicationResponse
 from app.services.application_service import (
@@ -13,6 +14,7 @@ from app.services.application_service import (
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
+from app.models.codebase_upload import CodebaseUpload
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
@@ -72,4 +74,42 @@ def delete_application_endpoint(
     success = delete_application(db, application_id=application_id)
     if not success:
         raise HTTPException(status_code=404, detail="Application not found")
-    return None
+
+
+@router.post("/upload-codebase", status_code=status.HTTP_201_CREATED)
+def upload_codebase(
+    file: UploadFile = File(...),
+    application_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_write_access)
+):
+    """Upload codebase via ZIP file"""
+    import uuid
+    
+    if not file.filename.endswith('.zip'):
+        raise HTTPException(status_code=400, detail="Only ZIP files are supported")
+    
+    uploads_dir = Path("uploads")
+    uploads_dir.mkdir(exist_ok=True)
+    
+    upload_id = str(uuid.uuid4())
+    file_path = uploads_dir / f"{upload_id}_{file.filename}"
+    
+    with open(file_path, "wb") as buffer:
+        content = file.file.read()
+        buffer.write(content)
+    
+    codebase_upload = CodebaseUpload(
+        upload_id=upload_id,
+        application_id=application_id,
+        source_type="zip",
+        file_path=str(file_path),
+        file_name=file.filename,
+        file_size=len(content),
+        status="uploaded"
+    )
+    
+    db.add(codebase_upload)
+    db.commit()
+    
+    return {"message": "Codebase uploaded successfully", "upload_id": upload_id}

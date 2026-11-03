@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchCVEs, deleteCVE } from '../api/client';
+import { fetchCVEs, deleteCVE, fetchApplications } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 
@@ -7,14 +7,30 @@ function CVEsPage() {
   const [cves, setCves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [severityFilter, setSeverityFilter] = useState('');
+  const [applicationFilter, setApplicationFilter] = useState('');
+  const [applications, setApplications] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [totalCVEs, setTotalCVEs] = useState(0);
   const { canDelete } = useAuth();
 
   useEffect(() => {
+    loadApplications();
+  }, []);
+
+  useEffect(() => {
     loadCVEs();
-  }, [severityFilter, currentPage, pageSize]);
+  }, [severityFilter, applicationFilter, currentPage, pageSize]);
+
+  const loadApplications = async () => {
+    try {
+      const response = await fetchApplications();
+      const apps = response.data || [];
+      setApplications(apps);
+    } catch (err) {
+      console.error('Error loading applications:', err);
+    }
+  };
 
   const loadCVEs = async () => {
     try {
@@ -25,11 +41,31 @@ function CVEsPage() {
       if (severityFilter) {
         params.severity = severityFilter;
       }
+      if (applicationFilter) {
+        params.application_id = applicationFilter;
+      }
       const response = await fetchCVEs(params);
-      setCves(response.data);
-      setTotalCVEs(response.total || response.data.length);
+      console.log('CVEs API response:', response);
+      
+      // Axios wraps the response, so we need to access response.data
+      const apiData = response.data;
+      
+      // Handle both old format (array) and new format (object with data/total)
+      if (Array.isArray(apiData)) {
+        setCves(apiData);
+        setTotalCVEs(apiData.length);
+      } else if (apiData.data && Array.isArray(apiData.data)) {
+        setCves(apiData.data);
+        setTotalCVEs(apiData.total || apiData.data.length);
+      } else {
+        console.error('Unexpected response format:', apiData);
+        setCves([]);
+        setTotalCVEs(0);
+      }
     } catch (err) {
       console.error('Error loading CVEs:', err);
+      setCves([]);
+      setTotalCVEs(0);
     } finally {
       setLoading(false);
     }
@@ -57,6 +93,12 @@ function CVEsPage() {
           <p style={{ fontSize: '14px', color: '#606060', margin: 0 }}>View and manage Common Vulnerabilities and Exposures</p>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <select value={applicationFilter} onChange={(e) => setApplicationFilter(e.target.value)} style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }}>
+            <option value="">All Applications</option>
+            {applications.map(app => (
+              <option key={app.id} value={app.id}>{app.name}</option>
+            ))}
+          </select>
           <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }}>
             <option value="">All Severities</option>
             <option value="critical">Critical</option>

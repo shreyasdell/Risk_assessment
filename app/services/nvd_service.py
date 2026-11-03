@@ -1,20 +1,15 @@
 """
-NVD API v2.0 Client - FIXED VERSION
+NVD API v2.0 Client - TWO-PHASE APPROACH
 
-Problems with previous version:
-1. keywordExactMatch was too strict
-2. Did not try multiple search strategies
-3. Did not handle component name variations
-4. Did not properly use CPE matching
+Phase 1: Discovery (NVD keyword search) - get CVE IDs only
+Phase 2: Verification (CVE.org API) - precise check of each CVE
 
-Fix approach:
-- Try CPE first (most accurate)
-- Then try keyword WITHOUT exact match
-- Clean component names before searching
-- Try name variations (log4j -> log4j-core)
+This solves the problem where NVD lacks CPE data for many CVEs.
+Instead of relying on NVD's incomplete data, we use NVD only for
+discovery (fast keyword search), then verify each CVE with CVE.org
+which has complete CPE and version range data.
 """
 
-import os
 import httpx
 import asyncio
 import re
@@ -24,6 +19,9 @@ from sqlalchemy.orm import Session
 
 from app.models.cve import CVE
 from app.models.component import Component
+from app.agent.cve_filter_agent import CVEFilterAgent
+from app.core.config import settings
+from app.services.cve_org_service import cve_org_client
 
 
 class NVDService:
@@ -31,7 +29,7 @@ class NVDService:
     BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
     def __init__(self):
-        self.api_key = os.getenv("NVD_API_KEY")
+        self.api_key = settings.NVD_API_KEY
         self.headers = {}
         if self.api_key:
             self.headers["apiKey"] = self.api_key
@@ -39,6 +37,14 @@ class NVDService:
         self.request_times: List[datetime] = []
         self.max_requests = 50 if self.api_key else 5
         self.rate_window = 30
+
+        # Initialize CVE Filter Agent
+        self.cve_agent = CVEFilterAgent(
+            ollama_url=settings.OLLAMA_URL,
+            model=settings.OLLAMA_MODEL,
+            ollama_timeout=settings.OLLAMA_TIMEOUT,
+            display_threshold=settings.CVE_DISPLAY_THRESHOLD,
+        )
 
     async def _rate_limit(self):
         """Wait if we are about to exceed NVD rate limits."""
@@ -271,6 +277,41 @@ class NVDService:
         )
         return []
 
+    async def discover_cve_ids(
+        self,
+        component_name: str,
+        component_version: str = None
+    ) -> List[str]:
+        """
+        Phase 1: Discovery - Get CVE IDs from NVD keyword search.
+
+        This is fast and returns only CVE IDs (candidate CVEs).
+        Verification happens in Phase 2 via CVE.org.
+
+        Args:
+            component_name: Component name
+            component_version: Optional version
+
+        Returns:
+            List of CVE IDs (e.g., ["CVE-2024-12345", "CVE-2023-67890"])
+        """
+        queries = self._generate_search_queries(component_name, component_version)
+        cve_ids = set()
+
+        for query_params in queries:
+            data = await self._make_request(query_params)
+
+            if data and data.get("totalResults", 0) > 0:
+                vulnerabilities = data.get("vulnerabilities", [])
+                for vuln in vulnerabilities:
+                    cve = vuln.get("cve", {})
+                    cve_id = cve.get("id", "")
+                    if cve_id:
+                        cve_ids.add(cve_id)
+
+        print(f"[NVD Discovery] Found {len(cve_ids)} CVE IDs for {component_name}")
+        return list(cve_ids)
+
     def _filter_relevant_cves(
         self,
         cves: List[Dict],
@@ -479,51 +520,134 @@ class NVDService:
         """
         Main method called by the API endpoint.
 
-        1. Fetch CVEs from NVD
-        2. Create or update CVE records
-        3. Link CVEs to the component
-        4. Return results
+        TWO-PHASE APPROACH:
+        1. Phase 1: Discovery - Get CVE IDs from NVD keyword search (fast)
+        2. Phase 2: Verification - Verify each CVE with CVE.org (precise)
+        3. Create or update CVE records with verification metadata
+        4. Link CVEs to the component
+        5. Return results
         """
-        loop = asyncio.new_event_loop()
-        try:
-            cve_data_list = loop.run_until_complete(
-                self.fetch_cves_for_component(
-                    component_name=component.name,
-                    component_version=component.version,
-                    cpe=component.cpe
-                )
+        async def sync_cves_async():
+            # Phase 1: Discover CVE IDs from NVD
+            cve_ids = await self.discover_cve_ids(
+                component_name=component.name,
+                component_version=component.version
             )
-        finally:
-            loop.close()
 
-        if not cve_data_list:
-            print(
-                f"[NVD] No CVEs found for "
-                f"{component.name} {component.version}"
-            )
+            if not cve_ids:
+                print(f"[NVD Discovery] No CVE IDs found for {component.name} {component.version}")
+                return []
+
+            print(f"[CVE.org Verification] Verifying {len(cve_ids)} CVEs for {component.name} {component.version}")
+
+            # Phase 2: Verify each CVE with CVE.org (PARALLEL)
+            async def verify_cve(cve_id):
+                """Verify a single CVE with CVE.org"""
+                try:
+                    cve_org_data = await cve_org_client.fetch_cve(cve_id)
+                    if not cve_org_data:
+                        return None
+                    parsed = cve_org_client.parse_cve_record(cve_org_data)
+                    is_affected, confidence, reason = cve_org_client.is_component_affected(
+                        parsed,
+                        component.name,
+                        component.version,
+                        component.purl
+                    )
+                    if is_affected and confidence >= 50:
+                        return {
+                            "cve_id": cve_id,
+                            "parsed_data": parsed,
+                            "confidence": confidence,
+                            "reason": reason
+                        }
+                    return None
+                except Exception as e:
+                    print(f"[CVE.org] Error verifying {cve_id}: {e}")
+                    return None
+
+            async def verify_all_cves(cve_ids):
+                """Verify all CVEs in parallel with concurrency limit"""
+                semaphore = asyncio.Semaphore(10)  # Max 10 concurrent requests
+
+                async def verify_with_semaphore(cve_id):
+                    async with semaphore:
+                        return await verify_cve(cve_id)
+
+                tasks = [verify_with_semaphore(cve_id) for cve_id in cve_ids]
+                results = await asyncio.gather(*tasks)
+                return [r for r in results if r is not None]
+
+            verified_cves = await verify_all_cves(cve_ids)
+            return verified_cves
+
+        # Run the async sync operation
+        verified_cves = asyncio.run(sync_cves_async())
+
+        if not verified_cves:
+            print(f"[CVE.org] No verified CVEs for {component.name} {component.version}")
             return []
 
-        saved_cves = []
+        print(f"[CVE.org] Verified {len(verified_cves)} CVEs for {component.name} {component.version}")
 
-        for cve_data in cve_data_list:
-            # Check if CVE already exists in our database
-            existing = (
-                db.query(CVE)
-                .filter(CVE.cve_id == cve_data["cve_id"])
-                .first()
-            )
+        # Save verified CVEs to database
+        saved_cves = []
+        for verified in verified_cves:
+            parsed_data = verified["parsed_data"]
+            cve_id = verified["cve_id"]
+            confidence = verified["confidence"]
+            reason = verified["reason"]
+
+            # Check if CVE already exists
+            existing = db.query(CVE).filter(CVE.cve_id == cve_id).first()
 
             if existing:
-                # Update with latest data from NVD
-                for key, value in cve_data.items():
-                    if value is not None:
-                        setattr(existing, key, value)
+                # Update with latest data
+                existing.description = parsed_data.get("description", "")
+                existing.cvss_score = parsed_data.get("cvss_score", 0.0)
+                existing.cvss_vector = parsed_data.get("cvss_vector", "")
+                existing.severity = parsed_data.get("severity", "unknown")
+                existing.cwe_id = parsed_data.get("cwe_id")
+                existing.published_date = self._parse_date(parsed_data.get("published_date"))
+                existing.exploit_available = parsed_data.get("exploit_available", False)
+                existing.patch_available = parsed_data.get("patch_available", False)
+                existing.references = parsed_data.get("references", "")
+                existing.nvd_url = parsed_data.get("nvd_url", "")
+
+                # Update agent fields
+                existing.agent_confidence = confidence
+                existing.agent_verdict = "RELEVANT"
+                existing.agent_reasoning = reason
+                existing.match_method = "cve_org_verification"
+                existing.stage_details = {"cve_org": {"verified": True, "confidence": confidence}}
+                existing.agent_processing_time = 0.0
+                existing.agent_processed_at = datetime.utcnow()
+
                 cve_record = existing
             else:
                 # Create new CVE record
-                cve_record = CVE(**cve_data)
+                cve_record = CVE(
+                    cve_id=cve_id,
+                    description=parsed_data.get("description", ""),
+                    cvss_score=parsed_data.get("cvss_score", 0.0),
+                    cvss_vector=parsed_data.get("cvss_vector", ""),
+                    severity=parsed_data.get("severity", "unknown"),
+                    cwe_id=parsed_data.get("cwe_id"),
+                    published_date=self._parse_date(parsed_data.get("published_date")),
+                    exploit_available=parsed_data.get("exploit_available", False),
+                    patch_available=parsed_data.get("patch_available", False),
+                    references=parsed_data.get("references", ""),
+                    nvd_url=parsed_data.get("nvd_url", ""),
+                    # Agent fields
+                    agent_confidence=confidence,
+                    agent_verdict="RELEVANT",
+                    agent_reasoning=reason,
+                    match_method="cve_org_verification",
+                    stage_details={"cve_org": {"verified": True, "confidence": confidence}},
+                    agent_processing_time=0.0,
+                    agent_processed_at=datetime.utcnow(),
+                )
                 db.add(cve_record)
-                db.flush()
 
             # Link CVE to component if not already linked
             if cve_record not in component.cves:
@@ -532,14 +656,7 @@ class NVDService:
             saved_cves.append(cve_record)
 
         db.commit()
-
-        for cve in saved_cves:
-            db.refresh(cve)
-
-        print(
-            f"[NVD] Saved {len(saved_cves)} CVEs for "
-            f"{component.name} {component.version}"
-        )
+        print(f"[NVD] Saved {len(saved_cves)} verified CVEs for {component.name} {component.version}")
         return saved_cves
 
 

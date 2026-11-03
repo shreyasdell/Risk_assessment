@@ -312,6 +312,10 @@ def calculate_and_save_risk_score(
     if not application:
         raise ValueError("Application not found")
     
+    # Check if application has components
+    if not application.components or len(application.components) == 0:
+        raise ValueError("Cannot calculate risk score: Application has no components. Please upload an SBOM first.")
+    
     # Get all CVEs for the application
     cves = get_application_cves(db, application_id)
     
