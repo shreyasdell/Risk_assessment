@@ -14,6 +14,7 @@ from app.services.cve_service import (
     get_cves_for_component
 )
 from app.services.nvd_service import nvd_service
+from app.services.background_sync_service import background_sync_service
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
@@ -333,7 +334,7 @@ def bulk_link_cves(
     """
     from app.models.component import Component
     from app.models.cve import CVE
-    
+
     component = db.query(Component).filter(Component.id == component_id).first()
     if not component:
         raise HTTPException(status_code=404, detail=f"Component {component_id} not found")
@@ -363,3 +364,62 @@ def bulk_link_cves(
         "not_found": not_found,
         "total_linked": len(linked)
     }
+
+
+@router.post("/sync-all-background", summary="Start bulk CVE sync in background")
+def sync_all_cves_background(
+    application_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Start a bulk CVE sync operation in the background.
+
+    Returns immediately with a task ID. Use the /tasks/{task_id} endpoint
+    to poll for progress.
+
+    This is non-blocking and suitable for large SBOMs with 100+ components.
+    """
+    try:
+        task = background_sync_service.start_bulk_cve_sync(
+            db=db,
+            application_id=application_id,
+            username=current_user.username
+        )
+        return {
+            "message": "Bulk CVE sync started in background",
+            "task_id": task.id,
+            "total_components": task.total_items,
+            "status": task.status
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/tasks/{task_id}", summary="Get background task progress")
+def get_task_progress(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the current progress of a background sync task.
+
+    Poll this endpoint to show a progress bar in the UI.
+    """
+    task_status = background_sync_service.get_task_status(db, task_id)
+    if not task_status:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task_status
+
+
+@router.get("/tasks", summary="Get recent background tasks")
+def get_recent_tasks(
+    task_type: Optional[str] = Query(None),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get recent background tasks for monitoring."""
+    return background_sync_service.get_recent_tasks(db, task_type=task_type, limit=limit)
+

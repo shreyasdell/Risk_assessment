@@ -24,6 +24,11 @@ class CVE(Base, CVEAgentMixin):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 
+    # CVE.org cache fields
+    cveorg_affected_products = Column(JSON, nullable=True)  # Stores the full affected[] array from CVE.org
+    cveorg_fetched_at = Column(DateTime, nullable=True)  # When we last fetched from CVE.org
+    cveorg_raw = Column(JSON, nullable=True)  # Optional: store complete CVE.org response for debugging
+
     components = relationship("Component", secondary="component_cve", back_populates="cves")
     remediations = relationship(
         "Remediation",

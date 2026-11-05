@@ -8,6 +8,7 @@ from app.models.remediation import Remediation, RemediationStatus, RemediationPr
 from app.models.audit_log import AuditLog
 from app.models.nist_recommendation import NistRecommendation
 from app.models.codebase_upload import CodebaseUpload
+from app.models.background_task import BackgroundTask
 
 __all__ = [
     "User",
@@ -22,4 +23,5 @@ __all__ = [
     "AuditLog",
     "NistRecommendation",
     "CodebaseUpload",
+    "BackgroundTask",
 ]

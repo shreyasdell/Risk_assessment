@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchComponents, fetchApplications, createComponent, updateComponent, deleteComponent, syncCVEs, syncAllCVEs, fetchLinkedCVEs } from '../api/client';
+import { fetchComponents, fetchApplications, createComponent, updateComponent, deleteComponent, syncCVEs, syncAllCVEs, syncAllCVEsBackground, getTaskProgress, fetchLinkedCVEs } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,6 +11,7 @@ function ComponentsPage() {
   const [editingComponent, setEditingComponent] = useState(null);
   const [syncingCVEs, setSyncingCVEs] = useState({});
   const [bulkSyncing, setBulkSyncing] = useState(false);
+  const [backgroundTask, setBackgroundTask] = useState(null);
   const [showCVEsModal, setShowCVEsModal] = useState(false);
   const [selectedComponentCVEs, setSelectedComponentCVEs] = useState(null);
   const [cveCurrentPage, setCveCurrentPage] = useState(1);
@@ -104,21 +105,62 @@ function ComponentsPage() {
   const handleCreate = () => { setEditingComponent(null); setFormData({ name: '', version: '', component_type: 'library', purl: '', supplier: '', description: '', license: '', application_id: '' }); setShowModal(true); };
   const handleEdit = (component) => { setEditingComponent(component); setFormData({ name: component.name, version: component.version || '', component_type: component.component_type || 'library', purl: component.purl || '', supplier: component.supplier || '', description: component.description || '', license: component.license || '', application_id: component.application_id || '' }); setShowModal(true); };
   const handleSubmit = async (e) => { e.preventDefault(); try { if (editingComponent) await updateComponent(editingComponent.id, formData); else await createComponent(formData); setShowModal(false); loadComponents(); } catch (err) { console.error(err); alert('Failed'); } };
-  const handleSyncCVEs = async (componentId) => { setSyncingCVEs(prev => ({ ...prev, [componentId]: true })); try { await syncCVEs(componentId); alert('CVEs synced'); loadComponents(); } catch (err) { console.error(err); alert('Failed'); } finally { setSyncingCVEs(prev => ({ ...prev, [componentId]: false })); } };
+  const handleSyncCVEs = async (componentId) => {
+    setSyncingCVEs(prev => ({ ...prev, [componentId]: true }));
+    try {
+      await syncCVEs(componentId);
+      alert('CVEs synced');
+      // Don't reload components to prevent re-ordering
+      // The CVE count will be updated when needed
+    } catch (err) {
+      console.error(err);
+      alert('Failed');
+    } finally {
+      setSyncingCVEs(prev => ({ ...prev, [componentId]: false }));
+    }
+  };
 
   const handleBulkSyncCVEs = async () => {
-    if (!window.confirm(`Sync CVEs for all components${selectedApplication ? ' in this application' : ''}? This may take several minutes.`)) {
+    if (!window.confirm(`Sync CVEs for all components${selectedApplication ? ' in this application' : ''}? This will run in the background.`)) {
       return;
     }
     setBulkSyncing(true);
     try {
-      const response = await syncAllCVEs(selectedApplication || null);
-      alert(`Bulk sync completed: ${response.data.processed} succeeded, ${response.data.failed} failed`);
-      loadComponents();
+      const response = await syncAllCVEsBackground(selectedApplication || null);
+      const taskId = response.data.task_id;
+      setBackgroundTask({ id: taskId, status: 'running', progress: 0 });
+
+      // Poll for progress
+      const pollInterval = setInterval(async () => {
+        try {
+          const progress = await getTaskProgress(taskId);
+          setBackgroundTask(progress.data);
+
+          if (progress.data.status === 'completed' || progress.data.status === 'failed') {
+            clearInterval(pollInterval);
+            setBulkSyncing(false);
+
+            if (progress.data.status === 'completed') {
+              alert(`Bulk sync completed: ${progress.data.result.processed} succeeded, ${progress.data.result.failed} failed`);
+              // Don't reload components to prevent re-ordering
+              // User can manually refresh if needed
+            } else {
+              alert(`Bulk sync failed: ${progress.data.error_message}`);
+            }
+
+            setBackgroundTask(null);
+          }
+        } catch (err) {
+          console.error('Error polling task progress:', err);
+          clearInterval(pollInterval);
+          setBulkSyncing(false);
+          setBackgroundTask(null);
+        }
+      }, 2000); // Poll every 2 seconds
+
     } catch (err) {
       console.error(err);
-      alert('Failed to sync CVEs');
-    } finally {
+      alert('Failed to start bulk sync');
       setBulkSyncing(false);
     }
   };
@@ -155,21 +197,25 @@ function ComponentsPage() {
             ))}
           </select>
           {canWrite && (
-            <button 
-              onClick={handleBulkSyncCVEs} 
+            <button
+              onClick={handleBulkSyncCVEs}
               disabled={bulkSyncing}
-              style={{ 
-                backgroundColor: bulkSyncing ? '#64748B' : '#107C10', 
-                color: '#FFFFFF', 
-                border: 'none', 
-                padding: '8px 16px', 
-                borderRadius: '4px', 
-                fontSize: '14px', 
-                fontWeight: 500, 
-                cursor: bulkSyncing ? 'not-allowed' : 'pointer' 
+              style={{
+                backgroundColor: bulkSyncing ? '#64748B' : '#107C10',
+                color: '#FFFFFF',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '4px',
+                fontSize: '14px',
+                fontWeight: 500,
+                cursor: bulkSyncing ? 'not-allowed' : 'pointer'
               }}
             >
-              {bulkSyncing ? 'Syncing All...' : 'Sync All CVEs'}
+              {bulkSyncing && backgroundTask
+                ? `Syncing... ${backgroundTask.progress_percentage || 0}%`
+                : bulkSyncing
+                ? 'Starting...'
+                : 'Sync All CVEs'}
             </button>
           )}
           {canWrite && (

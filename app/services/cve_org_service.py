@@ -18,6 +18,34 @@ import httpx
 import asyncio
 import re
 from typing import Optional, List, Dict, Tuple
+
+# Fix 6: Generic name blocklist - common English words that should require CPE-based lookup
+GENERIC_NAME_BLOCKLIST = {
+    "make", "patch", "file", "time", "test", "date", "core", "base", "lib", "tool",
+    "utils", "common", "framework", "process", "service", "client", "server",
+    "config", "data", "main", "app", "system", "user", "admin", "auth"
+}
+
+# Fix 7: Known CPE vendor mappings for accurate NVD searching
+CPE_VENDOR_MAPPINGS = {
+    "make": "gnu",
+    "patch": "gnu",
+    "openssl": "openssl",
+    "python3": "python",
+    "python": "python",
+    "node": "nodejs",
+    "java": "oracle",
+    "mysql": "oracle",
+    "postgresql": "postgresql",
+    "postgres": "postgresql",
+    "nginx": "f5",
+    "apache": "apache",
+    "tomcat": "apache",
+    "libxml2": "xmlsoft",
+    "libpng": "libpng",
+    "libjpeg": "ijg",
+    "zlib": "gnu"
+}
 from datetime import datetime
 
 
@@ -151,7 +179,14 @@ class CVEOrgClient:
                 # Clean version strings - remove trailing dashes, spaces, etc.
                 version_start = ver.get("version", "").strip().rstrip("-")
                 version_end = ver.get("lessThanOrEqual", ver.get("lessThan", "")).strip().rstrip("-")
-                
+
+                # Fix Issue 2: Parse composite version strings like ">= 0.6.0, < 2.9.0"
+                # If version_start contains a comma, it's a composite constraint
+                if "," in version_start:
+                    version_start = self._parse_composite_version(version_start)
+                if "," in version_end:
+                    version_end = self._parse_composite_version(version_end)
+
                 versions_info.append({
                     "status": ver.get("status", ""),
                     "version_start": version_start,
@@ -195,7 +230,7 @@ class CVEOrgClient:
             "solutions": solutions,
         }
 
-    def is_component_affected(
+    async def is_component_affected(
         self,
         cve_data: Dict,
         component_name: str,
@@ -211,8 +246,16 @@ class CVEOrgClient:
         """
         affected_products = cve_data.get("affected_products", [])
 
+        # Fix: Handle "n/a" products (old CVEs without structured data)
+        # These CVEs predate ~2020 and need LLM analysis
         if not affected_products:
             return (False, 20, "No affected product data")
+
+        # Check if all products are "n/a" (old CVE format)
+        all_na = all(p.get("product", "").lower() == "n/a" for p in affected_products)
+        if all_na:
+            # Use LLM to analyze old CVEs without structured data
+            return await self._llm_analyze_old_cve(cve_data, component_name, component_version, component_purl)
 
         clean_name = component_name.lower().strip()
         clean_version = component_version.strip()
@@ -226,6 +269,10 @@ class CVEOrgClient:
             product = product_info.get("product", "").lower()
             cpes = product_info.get("cpes", [])
             versions = product_info.get("versions", [])
+
+            # Skip "n/a" products
+            if product == "n/a":
+                continue
 
             # ── Check 1: Product name match ──────────
             product_match = False
@@ -269,6 +316,11 @@ class CVEOrgClient:
                 end_type = ver_info.get("version_end_type", "including")
                 version_type = ver_info.get("version_type", "custom")
 
+                # Fix: Strip product name from version string before parsing
+                # e.g., "binutils 2.34" -> "2.34", "GNU binutils version 2.36" -> "2.36"
+                version_start = self._strip_product_from_version(version_start, product)
+                version_end = self._strip_product_from_version(version_end, product)
+
                 in_range = self._check_version_in_range(
                     clean_version,
                     version_start,
@@ -277,7 +329,16 @@ class CVEOrgClient:
                     version_type
                 )
 
-                if in_range:
+                # Fix Issue 1: Handle None return (no end version)
+                if in_range is None:
+                    return (
+                        True,
+                        50,  # Lowered confidence from 95 to 50
+                        f"Product '{product}' matched. "
+                        f"Version {clean_version} >= {version_start} "
+                        f"but no upper bound specified - NEEDS_REVIEW"
+                    )
+                elif in_range:
                     return (
                         True,
                         95,
@@ -304,12 +365,15 @@ class CVEOrgClient:
             )
 
         # No product matched
+        # Fix Issue 3: Truncate product list in log output
+        product_list = [p['product'] for p in affected_products if p.get('product', '').lower() != 'n/a']
+        if len(product_list) > 5:
+            product_list = product_list[:5] + [f"... ({len(product_list) - 5} more)"]
         return (
             False,
             85,
             f"Component '{component_name}' does not match "
-            f"any affected product: "
-            f"{[p['product'] for p in affected_products]}"
+            f"any affected product: {product_list}"
         )
 
     def _check_version_in_range(
@@ -354,19 +418,75 @@ class CVEOrgClient:
                     print(f"[VERSION CHECK] v <= v_end ({v} <= {v_end}) = {result}")
                     return result
                 else:
-                    # lessThan: versions < v_end are affected
+                    # lessThan (excluding): versions < v_end are affected
                     # v == v_end means it's the fix version, NOT affected
+                    # Use strict less-than comparison
                     result = v < v_end
-                    print(f"[VERSION CHECK] v < v_end ({v} < {v_end}) = {result}")
+                    print(f"[VERSION CHECK] v < v_end (excluding) ({v} < {v_end}) = {result}")
                     return result
 
-            # No end version specified - assume all versions >= start are affected
-            print(f"[VERSION CHECK] No end version, assuming affected")
-            return True
+            # Fix Issue 1: No end version specified - cannot confirm affected range
+            # Reduce confidence significantly and mark as NEEDS_REVIEW
+            print(f"[VERSION CHECK] No end version, cannot confirm affected range - lowering confidence")
+            # We'll handle this in the caller by checking if end is None
+            return None  # Signal to caller that this needs special handling
 
         except ImportError:
             print(f"[VERSION CHECK] packaging not installed, using string compare")
             return self._string_version_compare(version, start, end, end_type)
+
+    def _strip_product_from_version(self, version_str: str, product_name: str) -> str:
+        """
+        Fix 3: Strip product name prefix from version string.
+        e.g., "binutils 2.34" -> "2.34", "GNU binutils version 2.36" -> "2.36"
+        """
+        if not version_str:
+            return version_str
+        
+        # Try to extract version-like pattern
+        match = re.search(r'(\d+\.\d+(?:\.\d+)?)', version_str)
+        if match:
+            return match.group(1)
+        
+        # Fallback: remove common prefixes
+        prefixes_to_remove = [product_name.lower(), "version", "before", "including", "up to"]
+        cleaned = version_str.lower()
+        for prefix in prefixes_to_remove:
+            cleaned = cleaned.replace(prefix, "")
+        
+        # Extract first version-like pattern from cleaned string
+        match = re.search(r'(\d+\.\d+(?:\.\d+)?)', cleaned)
+        if match:
+            return match.group(1)
+        
+        return version_str
+
+    def _parse_composite_version_string(self, version_str: str) -> Tuple[str, str, str]:
+        """
+        Fix 4: Parse composite version strings like ">= 0.6.0, < 2.9.0"
+        Returns: (start_version, end_version, end_type)
+        """
+        if not version_str:
+            return ("", "", "including")
+        
+        # Pattern: ">= X, < Y" or ">= X - Y"
+        # Extract start version
+        start_match = re.search(r'>=\s*(\d+\.\d+(?:\.\d+)?)', version_str)
+        if start_match:
+            start = start_match.group(1)
+        else:
+            start = ""
+        
+        # Extract end version
+        end_match = re.search(r'<\s*(\d+\.\d+(?:\.\d+)?)', version_str)
+        if end_match:
+            end = end_match.group(1)
+            end_type = "excluding"  # < means excluding
+        else:
+            end = ""
+            end_type = "including"
+        
+        return (start, end, end_type)
 
     def _string_version_compare(
         self,
@@ -398,7 +518,133 @@ class CVEOrgClient:
                 # excluding: v == v_end means it's the fix version, NOT affected
                 return v < v_end
 
-        return True
+        # Fix Issue 1: No end version specified - cannot confirm affected range
+        return None
+
+    def _parse_composite_version(self, version_str: str) -> str:
+        """
+        Fix Issue 2: Parse composite version strings like ">= 0.6.0, < 2.9.0"
+        Extract the most relevant version for comparison.
+        """
+        import re
+
+        # Remove operators and extract version numbers
+        # Pattern: >= 0.6.0, < 2.9.0 -> extract versions
+        versions = re.findall(r'[\d.]+', version_str)
+
+        if not versions:
+            return version_str
+
+        # Return the first version found (usually the lower bound)
+        # This is a simplification - ideally we'd parse the full constraint
+        return versions[0]
+
+    def _strip_product_from_version(self, version_str: str, product_name: str) -> str:
+        """
+        Strip product name prefix from version string.
+        
+        Examples:
+        - "binutils 2.34" -> "2.34"
+        - "GNU binutils version 2.36" -> "2.36"
+        - "Binutils 2.35.1" -> "2.35.1"
+        - "binutils 2.39-7" -> "2.39-7"
+        - "GNU Binutils version before and including 2.36" -> "2.36"
+        """
+        if not version_str:
+            return version_str
+        
+        # Try to extract version using regex (digits, dots, hyphens, tilde)
+        import re
+        version_match = re.search(r'[\d.]+(?:-[a-z0-9]+)?', version_str)
+        if version_match:
+            return version_match.group(0)
+        
+        # Fallback: return original
+        return version_str
+
+    async def _llm_analyze_old_cve(
+        self,
+        cve_data: Dict,
+        component_name: str,
+        component_version: str,
+        component_purl: str = None
+    ) -> Tuple[bool, int, str]:
+        """
+        Use LLM to analyze old CVEs (pre-2020) that have "n/a" product data.
+
+        These CVEs lack structured affected[] data, so we use the LLM to
+        read the description and determine if the component is affected.
+        """
+        cve_id = cve_data.get("cve_id", "")
+        description = cve_data.get("description", "")
+
+        prompt = f"""You are a cybersecurity expert analyzing CVE vulnerabilities.
+
+Given a component and a CVE description, determine if the component is affected by this vulnerability.
+
+Component: {component_name}
+Version: {component_version}
+PURL: {component_purl or 'N/A'}
+
+CVE ID: {cve_id}
+Description: {description}
+
+Analyze whether this CVE affects the component. Consider:
+1. Does the description mention the component name or related products?
+2. Does the version range mentioned in the CVE include the component's version?
+3. Is the component in the ecosystem this CVE targets?
+
+Respond in JSON format:
+{{"is_affected": true/false, "confidence": 0-100, "reasoning": "explanation"}}
+
+Examples:
+- Component: "binutils", Version: "2.34", CVE about "binutils 2.34 allows remote attackers..." -> {{"is_affected": true, "confidence": 85, "reasoning": "Description explicitly mentions binutils 2.34"}}
+- Component: "openssl", Version: "1.1.1", CVE about "log4j" -> {{"is_affected": false, "confidence": 90, "reasoning": "CVE affects log4j, not openssl"}}"""
+
+        try:
+            import httpx
+            import json
+            import re
+
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(
+                    "http://localhost:11434/api/generate",
+                    json={
+                        "model": "qwen2.5:7b",
+                        "prompt": prompt,
+                        "stream": False,
+                        "format": "json"
+                    }
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result.get("response", "{}")
+                    # Extract JSON from response
+                    try:
+                        parsed = json.loads(content)
+                    except json.JSONDecodeError:
+                        # Try to extract JSON from text
+                        match = re.search(r'\{[^}]+\}', content)
+                        if match:
+                            parsed = json.loads(match.group())
+                        else:
+                            parsed = {}
+
+                    is_affected = parsed.get("is_affected", False)
+                    confidence = parsed.get("confidence", 50)
+                    reasoning = parsed.get("reasoning", "LLM analysis")
+
+                    return (
+                        is_affected,
+                        confidence,
+                        f"LLM analysis of old CVE: {reasoning}"
+                    )
+
+        except Exception as e:
+            print(f"[CVE.org] LLM analysis failed for {cve_id}: {e}")
+
+        # Fallback: mark as uncertain
+        return (False, 25, "LLM analysis failed - CVE predates structured data, manual review required")
 
 
 # Singleton

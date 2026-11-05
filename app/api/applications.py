@@ -85,20 +85,29 @@ def upload_codebase(
 ):
     """Upload codebase via ZIP file"""
     import uuid
-    
+
     if not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="Only ZIP files are supported")
-    
+
+    # Validate file size (max 500MB for codebase ZIP files)
+    MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
+    content = file.file.read()
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File size exceeds 500MB limit"
+        )
+
     uploads_dir = Path("uploads")
     uploads_dir.mkdir(exist_ok=True)
-    
+
     upload_id = str(uuid.uuid4())
     file_path = uploads_dir / f"{upload_id}_{file.filename}"
-    
+
     with open(file_path, "wb") as buffer:
-        content = file.file.read()
         buffer.write(content)
-    
+
     codebase_upload = CodebaseUpload(
         upload_id=upload_id,
         application_id=application_id,
@@ -108,8 +117,8 @@ def upload_codebase(
         file_size=len(content),
         status="uploaded"
     )
-    
+
     db.add(codebase_upload)
     db.commit()
-    
+
     return {"message": "Codebase uploaded successfully", "upload_id": upload_id}

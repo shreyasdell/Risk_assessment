@@ -18,6 +18,10 @@ class Component(Base):
     cpe = Column(String, nullable=True)  # Common Platform Enumeration
     application_id = Column(Integer, ForeignKey("applications.id"), nullable=True)
     sbom_id = Column(String, index=True, nullable=True)  # Track which SBOM this came from
+    # Normalization fields
+    normalized_name = Column(String, nullable=True, index=True)  # Canonical NVD-searchable name
+    identified_vendor = Column(String, nullable=True)  # Identified vendor organization
+    normalization_method = Column(String, nullable=True)  # How normalization was done (tier1_purl, tier2_lookup, tier3_llm, fallback)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

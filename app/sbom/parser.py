@@ -6,7 +6,79 @@ from app.schemas.component import ComponentCreate
 
 class SBOMParser:
     """Base parser for SBOM files"""
-    
+
+    @staticmethod
+    def _extract_name_from_purl(purl: str, original_name: str) -> str:
+        """
+        Extract full package name from PURL for ecosystems where the name field is incomplete.
+
+        This fixes the issue where CycloneDX stores bare names (e.g., "framework") for
+        Composer packages, but the PURL contains the full vendor/package (e.g., "laravel/framework").
+
+        Args:
+            purl: Package URL string (e.g., "pkg:composer/laravel/framework@7.30.6")
+            original_name: Original name from SBOM (e.g., "framework")
+
+        Returns:
+            Full package name if PURL provides it, otherwise original name
+        """
+        if not purl:
+            return original_name
+
+        # Composer/PHP: pkg:composer/vendor/package@version
+        if purl.startswith("pkg:composer/"):
+            # Extract vendor/package from PURL
+            # Format: pkg:composer/vendor/package@version
+            # We need to extract everything between "pkg:composer/" and "@"
+            parts = purl.split("/")
+            if len(parts) >= 3:
+                # parts[0] = "pkg:composer", parts[1] = "vendor", parts[2] = "package@version"
+                vendor = parts[1]
+                package_with_version = parts[2]
+                # Remove version and qualifiers
+                package = package_with_version.split("@")[0].split("?")[0]
+                return f"{vendor}/{package}"
+
+        # Maven: pkg:maven/groupId/artifactId@version
+        # Maven already stores artifactId in name field, but we can use groupId/artifactId for clarity
+        if purl.startswith("pkg:maven/"):
+            parts = purl.split("/")
+            if len(parts) >= 3:
+                # parts[0] = "pkg:maven", parts[1] = "groupId", parts[2] = "artifactId@version"
+                group_id = parts[1]
+                artifact_id = parts[2].split("@")[0].split("?")[0]
+                # Use artifactId only (already correct in most cases)
+                # Or use groupId:artifactId format if needed
+                return artifact_id
+
+        # npm: pkg:npm/@scope/package@version or pkg:npm/package@version
+        # npm already stores full name correctly, no change needed
+        if purl.startswith("pkg:npm/"):
+            return original_name
+
+        # Python: pkg:pypi/package@version
+        # Python already stores name correctly, no change needed
+        if purl.startswith("pkg:pypi/"):
+            return original_name
+
+        # Go: pkg:golang/module@version
+        # Go already stores full module path correctly, no change needed
+        if purl.startswith("pkg:golang/"):
+            return original_name
+
+        # Alpine: pkg:apk/alpine/package@version
+        # Alpine already stores package name correctly, no change needed
+        if purl.startswith("pkg:apk/"):
+            return original_name
+
+        # Debian: pkg:deb/debian/package@version
+        # Debian already stores package name correctly, no change needed
+        if purl.startswith("pkg:deb/"):
+            return original_name
+
+        # For other ecosystems, return original name
+        return original_name
+
     @staticmethod
     def parse_cyclonedx_json(data: Dict, application_id: Optional[int] = None, sbom_id: Optional[str] = None) -> List[ComponentCreate]:
         """Parse CycloneDX JSON format"""
@@ -27,21 +99,25 @@ class SBOMParser:
         """Extract component data from CycloneDX component object"""
         name = comp.get("name")
         version = comp.get("version")
-        
+
         if not name or not version:
             return None
-        
+
         component_type = comp.get("type", "library")
         component_type_enum = SBOMParser._map_component_type(component_type)
-        
+
         purl = comp.get("purl")
         supplier = comp.get("supplier")
         description = comp.get("description")
         license_info = comp.get("licenses", [{}])[0].get("license", {}).get("id") if comp.get("licenses") else None
         cpe = comp.get("cpe")
-        
+
+        # Enrich name from PURL for ecosystems where name field is incomplete
+        # This fixes Composer packages where name is just "framework" but PURL has "laravel/framework"
+        enriched_name = SBOMParser._extract_name_from_purl(purl, name)
+
         return ComponentCreate(
-            name=name,
+            name=enriched_name,
             version=version,
             component_type=component_type_enum,
             purl=purl,
@@ -79,12 +155,16 @@ class SBOMParser:
                     component_type_enum = SBOMParser._map_component_type(
                         component_type.text if component_type is not None else "library"
                     )
-                    
+
+                    # Enrich name from PURL for ecosystems where name field is incomplete
+                    purl_text = purl.text if purl is not None else None
+                    enriched_name = SBOMParser._extract_name_from_purl(purl_text, name.text)
+
                     component = ComponentCreate(
-                        name=name.text,
+                        name=enriched_name,
                         version=version.text,
                         component_type=component_type_enum,
-                        purl=purl.text if purl is not None else None,
+                        purl=purl_text,
                         supplier=supplier.text if supplier is not None else None,
                         description=description.text if description is not None else None,
                         license=license_info,
@@ -119,28 +199,31 @@ class SBOMParser:
         """Extract component data from SPDX package object"""
         name = pkg.get("name")
         version = pkg.get("versionInfo")
-        
+
         if not name:
             return None
-        
+
         # SPDX doesn't always have version, use "NOASSERTION" if missing
         if not version:
             version = "unknown"
-        
+
         purl = pkg.get("externalRefs", [])
         purl_value = None
         for ref in purl:
             if ref.get("referenceType") == "purl":
                 purl_value = ref.get("referenceLocator")
                 break
-        
+
         supplier = pkg.get("supplier")
         description = pkg.get("description")
         license_info = pkg.get("licenseConcluded")
         download_location = pkg.get("downloadLocation")
-        
+
+        # Enrich name from PURL for ecosystems where name field is incomplete
+        enriched_name = SBOMParser._extract_name_from_purl(purl_value, name)
+
         return ComponentCreate(
-            name=name,
+            name=enriched_name,
             version=version,
             component_type="library",  # Changed from Enum to String
             purl=purl_value,

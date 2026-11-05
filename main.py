@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, vendors, applications, components, dashboard, cves, risk_scores, remediations, audit_logs, nist, search, reports
+from app.api import auth, vendors, applications, components, dashboard, cves, risk_scores, remediations, audit_logs, nist, search, reports, cache, normalize
 from app.agent.router import router as agent_router
 from app.middleware.rate_limit import rate_limit_middleware
 from app.middleware.csrf import csrf_middleware
@@ -37,6 +37,8 @@ app.include_router(nist.router)
 app.include_router(dashboard.router)
 app.include_router(search.router)
 app.include_router(reports.router)
+app.include_router(cache.router)
+app.include_router(normalize.router)
 app.include_router(agent_router)
 
 
