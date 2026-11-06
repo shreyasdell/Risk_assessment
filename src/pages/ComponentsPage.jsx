@@ -12,6 +12,56 @@ function ComponentsPage() {
   const [syncingCVEs, setSyncingCVEs] = useState({});
   const [bulkSyncing, setBulkSyncing] = useState(false);
   const [backgroundTask, setBackgroundTask] = useState(null);
+
+  // Restore background task from localStorage on mount
+  useEffect(() => {
+    const savedTask = localStorage.getItem('backgroundSyncTask');
+    if (savedTask) {
+      try {
+        const task = JSON.parse(savedTask);
+        if (task.status === 'running') {
+          setBackgroundTask(task);
+          setBulkSyncing(true);
+          // Resume polling
+          resumePolling(task.id);
+        }
+      } catch (err) {
+        console.error('Error parsing saved task:', err);
+        localStorage.removeItem('backgroundSyncTask');
+      }
+    }
+  }, []);
+
+  const resumePolling = (taskId) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const progress = await getTaskProgress(taskId);
+        const taskData = progress.data;
+        setBackgroundTask(taskData);
+        localStorage.setItem('backgroundSyncTask', JSON.stringify(taskData));
+
+        if (taskData.status === 'completed' || taskData.status === 'failed') {
+          clearInterval(pollInterval);
+          setBulkSyncing(false);
+          localStorage.removeItem('backgroundSyncTask');
+
+          if (taskData.status === 'completed') {
+            alert(`Bulk sync completed: ${taskData.result.processed} succeeded, ${taskData.result.failed} failed`);
+          } else {
+            alert(`Bulk sync failed: ${taskData.error_message}`);
+          }
+
+          setBackgroundTask(null);
+        }
+      } catch (err) {
+        console.error('Error polling task progress:', err);
+        clearInterval(pollInterval);
+        setBulkSyncing(false);
+        localStorage.removeItem('backgroundSyncTask');
+        setBackgroundTask(null);
+      }
+    }, 2000);
+  };
   const [showCVEsModal, setShowCVEsModal] = useState(false);
   const [selectedComponentCVEs, setSelectedComponentCVEs] = useState(null);
   const [cveCurrentPage, setCveCurrentPage] = useState(1);
@@ -128,24 +178,29 @@ function ComponentsPage() {
     try {
       const response = await syncAllCVEsBackground(selectedApplication || null);
       const taskId = response.data.task_id;
-      setBackgroundTask({ id: taskId, status: 'running', progress: 0 });
+      const initialTask = { id: taskId, status: 'running', progress: 0 };
+      setBackgroundTask(initialTask);
+      localStorage.setItem('backgroundSyncTask', JSON.stringify(initialTask));
 
       // Poll for progress
       const pollInterval = setInterval(async () => {
         try {
           const progress = await getTaskProgress(taskId);
-          setBackgroundTask(progress.data);
+          const taskData = progress.data;
+          setBackgroundTask(taskData);
+          localStorage.setItem('backgroundSyncTask', JSON.stringify(taskData));
 
-          if (progress.data.status === 'completed' || progress.data.status === 'failed') {
+          if (taskData.status === 'completed' || taskData.status === 'failed') {
             clearInterval(pollInterval);
             setBulkSyncing(false);
+            localStorage.removeItem('backgroundSyncTask');
 
-            if (progress.data.status === 'completed') {
-              alert(`Bulk sync completed: ${progress.data.result.processed} succeeded, ${progress.data.result.failed} failed`);
+            if (taskData.status === 'completed') {
+              alert(`Bulk sync completed: ${taskData.result.processed} succeeded, ${taskData.result.failed} failed`);
               // Don't reload components to prevent re-ordering
               // User can manually refresh if needed
             } else {
-              alert(`Bulk sync failed: ${progress.data.error_message}`);
+              alert(`Bulk sync failed: ${taskData.error_message}`);
             }
 
             setBackgroundTask(null);
@@ -154,6 +209,7 @@ function ComponentsPage() {
           console.error('Error polling task progress:', err);
           clearInterval(pollInterval);
           setBulkSyncing(false);
+          localStorage.removeItem('backgroundSyncTask');
           setBackgroundTask(null);
         }
       }, 2000); // Poll every 2 seconds

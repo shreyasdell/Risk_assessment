@@ -93,3 +93,11 @@ def delete_components_by_sbom_id(db: Session, sbom_id: str) -> int:
     db.query(Component).filter(Component.sbom_id == sbom_id).delete()
     db.commit()
     return count
+
+
+def delete_components_by_application_id(db: Session, application_id: int) -> int:
+    """Delete all components for a given application ID."""
+    count = db.query(Component).filter(Component.application_id == application_id).count()
+    db.query(Component).filter(Component.application_id == application_id).delete()
+    db.commit()
+    return count

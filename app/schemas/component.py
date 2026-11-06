@@ -11,7 +11,7 @@ class ComponentBase(BaseModel):
     purl: Optional[str] = Field(None, max_length=500, description="Package URL")
     supplier: Optional[str] = Field(None, max_length=100, description="Supplier name")
     description: Optional[str] = Field(None, max_length=2000, description="Component description")
-    license: Optional[str] = Field(None, max_length=100, description="License name")
+    license: Optional[str] = Field(None, max_length=500, description="License name")
     cpe: Optional[str] = Field(None, max_length=500, description="CPE string")
     application_id: Optional[int] = Field(None, ge=1, description="Application ID")
     sbom_id: Optional[str] = Field(None, max_length=100, description="SBOM ID")
@@ -38,7 +38,7 @@ class ComponentUpdate(BaseModel):
     purl: Optional[str] = Field(None, max_length=500)
     supplier: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = Field(None, max_length=2000)
-    license: Optional[str] = Field(None, max_length=100)
+    license: Optional[str] = Field(None, max_length=500)
     cpe: Optional[str] = Field(None, max_length=500)
     application_id: Optional[int] = Field(None, ge=1)
 

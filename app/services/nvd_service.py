@@ -290,6 +290,55 @@ class NVDService:
 
         return queries
 
+    def _fetch_cve_from_nvd_sync(self, cve_id: str) -> Optional[Dict]:
+        """
+        Fetch a single CVE from NVD API to get CVSS data (synchronous).
+        Returns parsed JSON or None on failure.
+        """
+        import requests
+        import time
+
+        # Simple rate limiting for sync calls
+        time.sleep(0.6)  # NVD rate limit: ~6 requests per 10 seconds
+
+        try:
+            # Correct NVD API endpoint uses query parameter
+            url = f"{self.BASE_URL}?cveId={cve_id}"
+            print(f"[NVD] Fetching CVSS from NVD for {cve_id}")
+
+            response = requests.get(
+                url,
+                headers=self.headers,
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                # NVD returns data in a "vulnerabilities" array
+                vulnerabilities = data.get("vulnerabilities", [])
+                if vulnerabilities:
+                    # Extract the CVE data from the response
+                    # The format is: vulnerabilities[0].cve
+                    cve_data = vulnerabilities[0].get("cve", {})
+                    return cve_data
+                return None
+
+            elif response.status_code == 403:
+                print(f"[NVD] 403 Forbidden for {cve_id}")
+                return None
+
+            elif response.status_code == 404:
+                print(f"[NVD] 404 Not Found for {cve_id}")
+                return None
+
+            else:
+                print(f"[NVD] Error fetching {cve_id}: {response.status_code}")
+                return None
+
+        except Exception as e:
+            print(f"[NVD] Exception fetching {cve_id}: {e}")
+            return None
+
     async def _make_request(
         self,
         params: Dict
@@ -429,7 +478,9 @@ class NVDService:
         self,
         component_name: str,
         component_version: str = None,
-        purl: str = None
+        purl: str = None,
+        constructed_cpe: str = None,
+        search_name: str = None
     ) -> List[str]:
         """
         Phase 1: Discovery - Get CVE IDs from NVD keyword search.
@@ -441,18 +492,19 @@ class NVDService:
             component_name: Component name
             component_version: Optional version
             purl: Optional Package URL for CPE construction
+            constructed_cpe: Pre-constructed CPE from LangGraph agent (NEW)
+            search_name: Pre-computed search name from LangGraph agent (NEW)
 
         Returns:
             List of CVE IDs (e.g., ["CVE-2024-12345", "CVE-2023-67890"])
         """
         cve_ids = set()
         
-        # Strategy 0: CPE-based search (MOST ACCURATE)
-        cpe = self._build_cpe(component_name, component_version, purl)
-        if cpe:
-            print(f"[NVD] Trying constructed CPE: {cpe}")
+        # Strategy 0: Use pre-constructed CPE from LangGraph agent (MOST ACCURATE)
+        if constructed_cpe:
+            print(f"[NVD] Using agent-constructed CPE: {constructed_cpe}")
             data = await self._make_request({
-                "cpeName": cpe,
+                "cpeName": constructed_cpe,
                 "resultsPerPage": 100,
             })
             if data and data.get("totalResults", 0) > 0:
@@ -461,28 +513,54 @@ class NVDService:
                     if cve_id:
                         cve_ids.add(cve_id)
                 print(f"[NVD] CPE search found {len(cve_ids)} CVEs")
-                # Don't return yet — also run keyword search to catch
-                # CVEs that might not have CPE entries
         
-        # Existing keyword search strategies continue here...
-        queries = self._generate_search_queries(component_name, component_version)
-
-        for query_params in queries:
-            data = await self._make_request(query_params)
-
+        # Strategy 1: Use pre-computed search name from LangGraph agent
+        if search_name and not cve_ids:
+            print(f"[NVD] Using agent search name: {search_name}")
+            data = await self._make_request({
+                "keywordSearch": search_name,
+                "resultsPerPage": 100,
+            })
             if data and data.get("totalResults", 0) > 0:
                 vulnerabilities = data.get("vulnerabilities", [])
-                
-                # Fix 5: Cap results at 100 for generic names to avoid excessive API calls
                 if len(vulnerabilities) > 100:
                     print(f"[NVD] Too many results ({len(vulnerabilities)}), capping at 100")
                     vulnerabilities = vulnerabilities[:100]
-                
                 for vuln in vulnerabilities:
                     cve = vuln.get("cve", {})
                     cve_id = cve.get("id", "")
                     if cve_id:
                         cve_ids.add(cve_id)
+                print(f"[NVD] Keyword search found {len(cve_ids)} CVEs")
+        
+        # Fallback: Original search strategies (only if agent data not available)
+        if not constructed_cpe and not search_name:
+            print(f"[NVD] No agent data, using fallback search")
+            cpe = self._build_cpe(component_name, component_version, purl)
+            if cpe:
+                print(f"[NVD] Trying fallback CPE: {cpe}")
+                data = await self._make_request({
+                    "cpeName": cpe,
+                    "resultsPerPage": 100,
+                })
+                if data and data.get("totalResults", 0) > 0:
+                    for vuln in data.get("vulnerabilities", []):
+                        cve_id = vuln.get("cve", {}).get("id", "")
+                        if cve_id:
+                            cve_ids.add(cve_id)
+            
+            queries = self._generate_search_queries(component_name, component_version)
+            for query_params in queries:
+                data = await self._make_request(query_params)
+                if data and data.get("totalResults", 0) > 0:
+                    vulnerabilities = data.get("vulnerabilities", [])
+                    if len(vulnerabilities) > 100:
+                        vulnerabilities = vulnerabilities[:100]
+                    for vuln in vulnerabilities:
+                        cve = vuln.get("cve", {})
+                        cve_id = cve.get("id", "")
+                        if cve_id:
+                            cve_ids.add(cve_id)
 
         print(f"[NVD Discovery] Found {len(cve_ids)} CVE IDs for {component_name}")
         return list(cve_ids)
@@ -703,42 +781,52 @@ class NVDService:
         5. Return results
         """
         async def sync_cves_async():
-            # Normalize component name for better NVD matching
-            display_name = component.name
-            if not component.normalized_name:
-                # Normalize if not already done
-                display_name, _, _ = component_normalizer.normalize_component(component, db)
-                # Use normalized name for display, fall back to original if normalization failed
-                if not display_name:
-                    display_name = component.name
+            # Use enriched fields from LangGraph agent if available
+            if component.constructed_cpe and component.search_name:
+                # Component was enriched by LangGraph agent
+                constructed_cpe = component.constructed_cpe
+                search_name = component.search_name
+                clean_version = component.clean_version or component_normalizer.clean_version(
+                    component.version,
+                    component.purl.split(":")[1].split("/")[0] if component.purl and ":" in component.purl else None
+                )
+                print(f"[NVD] Using LangGraph agent enriched data")
+                print(f"[NVD] Constructed CPE: {constructed_cpe}")
+                print(f"[NVD] Search name: {search_name}")
+                print(f"[NVD] Clean version: {clean_version}")
             else:
-                display_name = component.normalized_name
+                # Fallback to old ComponentNormalizer logic
+                display_name = component.name
+                if not component.normalized_name:
+                    display_name, _, _ = component_normalizer.normalize_component(component, db)
+                    if not display_name:
+                        display_name = component.name
+                else:
+                    display_name = component.normalized_name
 
-            # Convert display name to NVD-searchable format
-            # laravel/framework → "laravel framework"
-            # guzzlehttp/guzzle → "guzzle" (redundant vendor removed)
-            search_name = component_normalizer.get_search_name(display_name)
+                search_name = component_normalizer.get_search_name(display_name)
+                clean_version = component_normalizer.clean_version(
+                    component.version,
+                    component.purl.split(":")[1].split("/")[0] if component.purl and ":" in component.purl else None
+                )
+                constructed_cpe = None
+                print(f"[NVD] No agent data, using fallback search")
+                print(f"[NVD] Display name: {display_name}")
+                print(f"[NVD] Search name: {search_name} (for NVD API)")
+                print(f"[NVD] Cleaned version: {clean_version} (original: {component.version})")
 
-            # Also clean version string
-            search_version = component_normalizer.clean_version(
-                component.version,
-                component.purl.split(":")[1].split("/")[0] if component.purl and ":" in component.purl else None
-            )
-
-            print(f"[NVD] Display name: {display_name}")
-            print(f"[NVD] Search name: {search_name} (for NVD API)")
-            print(f"[NVD] Cleaned version: {search_version} (original: {component.version})")
-
-            # Phase 1: Discover CVE IDs from NVD (now with CPE-based search)
+            # Phase 1: Discover CVE IDs from NVD (now with LangGraph agent data)
             cve_ids = await self.discover_cve_ids(
                 component_name=search_name,
-                component_version=search_version,
-                purl=component.purl
+                component_version=clean_version,
+                purl=component.purl,
+                constructed_cpe=constructed_cpe,
+                search_name=search_name
             )
             
             # Store constructed CPE if component doesn't have one
             if not component.cpe:
-                constructed_cpe = self._build_cpe(search_name, search_version, component.purl)
+                constructed_cpe = self._build_cpe(search_name, clean_version, component.purl)
                 if constructed_cpe:
                     component.cpe = constructed_cpe
                     db.commit()
@@ -868,8 +956,22 @@ class NVDService:
                     new_description = existing.description
 
                 existing.description = new_description
-                existing.cvss_score = parsed_data.get("cvss_score", 0.0)
-                existing.cvss_vector = parsed_data.get("cvss_vector", "")
+
+                # Use CVE.org CVSS if available, otherwise fetch from NVD
+                cvss_score = parsed_data.get("cvss_score", 0.0)
+                cvss_vector = parsed_data.get("cvss_vector", "")
+                if cvss_score == 0.0:
+                    # CVE.org doesn't have CVSS, fetch from NVD
+                    nvd_data = self._fetch_cve_from_nvd_sync(cve_id)
+                    if nvd_data:
+                        nvd_cvss_score, nvd_cvss_vector, nvd_severity = self._extract_cvss(nvd_data)
+                        if nvd_cvss_score > 0.0:
+                            cvss_score = nvd_cvss_score
+                            cvss_vector = nvd_cvss_vector
+                            print(f"[NVD] Fetched CVSS from NVD for {cve_id}: {cvss_score}")
+
+                existing.cvss_score = cvss_score
+                existing.cvss_vector = cvss_vector
                 existing.severity = parsed_data.get("severity", "unknown")
                 existing.cwe_id = parsed_data.get("cwe_id")
                 existing.published_date = self._parse_date(parsed_data.get("published_date"))
@@ -900,11 +1002,24 @@ class NVDService:
 
                 description = parsed_data.get("description", "") or nvd_description
 
+                # Use CVE.org CVSS if available, otherwise fetch from NVD
+                cvss_score = parsed_data.get("cvss_score", 0.0)
+                cvss_vector = parsed_data.get("cvss_vector", "")
+                if cvss_score == 0.0:
+                    # CVE.org doesn't have CVSS, fetch from NVD
+                    nvd_data = self._fetch_cve_from_nvd_sync(cve_id)
+                    if nvd_data:
+                        nvd_cvss_score, nvd_cvss_vector, nvd_severity = self._extract_cvss(nvd_data)
+                        if nvd_cvss_score > 0.0:
+                            cvss_score = nvd_cvss_score
+                            cvss_vector = nvd_cvss_vector
+                            print(f"[NVD] Fetched CVSS from NVD for {cve_id}: {cvss_score}")
+
                 cve_record = CVE(
                     cve_id=cve_id,
                     description=description,
-                    cvss_score=parsed_data.get("cvss_score", 0.0),
-                    cvss_vector=parsed_data.get("cvss_vector", ""),
+                    cvss_score=cvss_score,
+                    cvss_vector=cvss_vector,
                     severity=parsed_data.get("severity", "unknown"),
                     cwe_id=parsed_data.get("cwe_id"),
                     published_date=self._parse_date(parsed_data.get("published_date")),
