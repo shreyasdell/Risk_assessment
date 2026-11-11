@@ -209,6 +209,45 @@ def sync_all_cves(
     return results
 
 
+@router.post("/tasks/{task_id}/pause", response_model=dict)
+def pause_sync_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Pause a running sync task."""
+    success = background_sync_service.pause_task(db, task_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Task cannot be paused (not running or not found)")
+    return {"message": "Task paused", "task_id": task_id}
+
+
+@router.post("/tasks/{task_id}/resume", response_model=dict)
+def resume_sync_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Resume a paused sync task."""
+    success = background_sync_service.resume_task(db, task_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Task cannot be resumed (not paused or not found)")
+    return {"message": "Task resumed", "task_id": task_id}
+
+
+@router.post("/tasks/{task_id}/cancel", response_model=dict)
+def cancel_sync_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Cancel a running or paused sync task."""
+    success = background_sync_service.cancel_task(db, task_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Task cannot be cancelled (not running/paused or not found)")
+    return {"message": "Task cancelled", "task_id": task_id}
+
+
 @router.post("/link", summary="Link a CVE to a component")
 def link_cve_to_component(
     cve_id: int,

@@ -2,6 +2,7 @@
 Background Sync Service
 
 Runs bulk CVE sync operations in the background with progress tracking.
+Supports pause, resume, and cancel operations.
 """
 
 import threading
@@ -19,6 +20,8 @@ class BackgroundSyncService:
 
     def __init__(self):
         self.active_tasks = {}  # task_id -> thread
+        self.pause_flags = {}  # task_id -> bool (pause flag)
+        self.cancel_flags = {}  # task_id -> bool (cancel flag)
 
     def start_bulk_cve_sync(
         self,
@@ -69,8 +72,43 @@ class BackgroundSyncService:
         thread.start()
 
         self.active_tasks[task.id] = thread
+        self.pause_flags[task.id] = False
+        self.cancel_flags[task.id] = False
 
         return task
+
+    def pause_task(self, db: Session, task_id: int) -> bool:
+        """Pause a running task."""
+        task = db.query(BackgroundTask).filter(BackgroundTask.id == task_id).first()
+        if not task or task.status != "running":
+            return False
+        
+        self.pause_flags[task_id] = True
+        task.status = "paused"
+        db.commit()
+        return True
+
+    def resume_task(self, db: Session, task_id: int) -> bool:
+        """Resume a paused task."""
+        task = db.query(BackgroundTask).filter(BackgroundTask.id == task_id).first()
+        if not task or task.status != "paused":
+            return False
+        
+        self.pause_flags[task_id] = False
+        task.status = "running"
+        db.commit()
+        return True
+
+    def cancel_task(self, db: Session, task_id: int) -> bool:
+        """Cancel a running or paused task."""
+        task = db.query(BackgroundTask).filter(BackgroundTask.id == task_id).first()
+        if not task or task.status not in ["running", "paused"]:
+            return False
+        
+        self.cancel_flags[task_id] = True
+        task.status = "cancelled"
+        db.commit()
+        return True
 
     def _run_bulk_sync(
         self,
@@ -105,6 +143,28 @@ class BackgroundSyncService:
             }
 
             for component_id in component_ids:
+                # Check for cancel flag
+                if self.cancel_flags.get(task_id, False):
+                    task.status = "cancelled"
+                    task.completed_at = datetime.utcnow()
+                    task.current_item = None
+                    db.commit()
+                    print(f"[Background Sync] Task cancelled by user")
+                    return
+                
+                # Check for pause flag
+                while self.pause_flags.get(task_id, False):
+                    import time
+                    time.sleep(0.5)
+                    # Re-check cancel while paused
+                    if self.cancel_flags.get(task_id, False):
+                        task.status = "cancelled"
+                        task.completed_at = datetime.utcnow()
+                        task.current_item = None
+                        db.commit()
+                        print(f"[Background Sync] Task cancelled while paused")
+                        return
+                
                 try:
                     # Fetch fresh component from new session
                     component = db.query(Component).filter(Component.id == component_id).first()
