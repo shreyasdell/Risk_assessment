@@ -54,6 +54,9 @@ class ComponentEnrichmentAgent:
     LangGraph-based agent for enriching SBOM components with NVD metadata.
     """
     
+    # In-memory cache (simple dict for now, could use LRU cache)
+    _memory_cache = {}
+    
     def __init__(self, db_session, ollama_url=None, model=None, ollama_timeout=None):
         self.db = db_session
         self.ollama_url = ollama_url or settings.OLLAMA_URL
@@ -222,15 +225,35 @@ class ComponentEnrichmentAgent:
             return state
     
     async def check_cache(self, state: dict) -> dict:
-        """Node 2: Check vendor/product cache."""
+        """Node 2: Check vendor/product cache (in-memory + database)."""
         logger.info(f"[check_cache] Checking cache for {state['name']}")
         
         from app.models.vendor_cache import VendorProductCache
         from sqlalchemy.sql import func
         
+        # Build cache key from PURL fields
+        cache_key = None
+        if state.get("purl_type") and state.get("purl_name"):
+            cache_key = f"{state['purl_type']}:{state.get('purl_namespace', '')}:{state['purl_name']}"
+        else:
+            # Fallback to component name if PURL fields not available
+            cache_key = state["name"]
+        
+        logger.info(f"[check_cache] Cache key: {cache_key}")
+        
+        # Check in-memory cache first
+        if cache_key in self._memory_cache:
+            cached = self._memory_cache[cache_key]
+            state["nvd_vendor"] = cached["nvd_vendor"]
+            state["nvd_product"] = cached["nvd_product"]
+            state["enrichment_method"] = "memory_cache"
+            state["confidence"] = cached["confidence"]
+            logger.info(f"[check_cache] Memory cache hit: {cached['nvd_vendor']}/{cached['nvd_product']}")
+            return state
+        
         # Check database cache
         cache_entry = self.db.query(VendorProductCache).filter(
-            VendorProductCache.component_name == state["name"]
+            VendorProductCache.component_name == cache_key
         ).first()
         
         if cache_entry:
@@ -244,7 +267,14 @@ class ComponentEnrichmentAgent:
             cache_entry.last_used_at = func.now()
             self.db.commit()
             
-            logger.info(f"[check_cache] Cache hit: {cache_entry.nvd_vendor}/{cache_entry.nvd_product}")
+            # Store in memory cache
+            self._memory_cache[cache_key] = {
+                "nvd_vendor": cache_entry.nvd_vendor,
+                "nvd_product": cache_entry.nvd_product,
+                "confidence": cache_entry.confidence
+            }
+            
+            logger.info(f"[check_cache] Database cache hit: {cache_entry.nvd_vendor}/{cache_entry.nvd_product}")
             return state
         else:
             logger.info(f"[check_cache] Cache miss")
