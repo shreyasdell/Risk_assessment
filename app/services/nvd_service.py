@@ -724,21 +724,37 @@ class NVDService:
         v31 = metrics.get("cvssMetricV31", [])
         if v31:
             cvss = v31[0].get("cvssData", {})
-            return (
-                cvss.get("baseScore", 0.0),
-                cvss.get("vectorString", ""),
-                cvss.get("baseSeverity", "UNKNOWN")
-            )
+            score = cvss.get("baseScore", 0.0)
+            severity = cvss.get("baseSeverity", "UNKNOWN")
+            # Calculate severity from score if not provided
+            if severity == "UNKNOWN":
+                if score >= 9.0:
+                    severity = "CRITICAL"
+                elif score >= 7.0:
+                    severity = "HIGH"
+                elif score >= 4.0:
+                    severity = "MEDIUM"
+                else:
+                    severity = "LOW"
+            return (score, cvss.get("vectorString", ""), severity)
 
         # CVSS v3.0
         v30 = metrics.get("cvssMetricV30", [])
         if v30:
             cvss = v30[0].get("cvssData", {})
-            return (
-                cvss.get("baseScore", 0.0),
-                cvss.get("vectorString", ""),
-                cvss.get("baseSeverity", "UNKNOWN")
-            )
+            score = cvss.get("baseScore", 0.0)
+            severity = cvss.get("baseSeverity", "UNKNOWN")
+            # Calculate severity from score if not provided
+            if severity == "UNKNOWN":
+                if score >= 9.0:
+                    severity = "CRITICAL"
+                elif score >= 7.0:
+                    severity = "HIGH"
+                elif score >= 4.0:
+                    severity = "MEDIUM"
+                else:
+                    severity = "LOW"
+            return (score, cvss.get("vectorString", ""), severity)
 
         # CVSS v2
         v2 = metrics.get("cvssMetricV2", [])
