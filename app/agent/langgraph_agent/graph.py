@@ -31,6 +31,9 @@ class ComponentEnrichmentState(TypedDict):
     purl: Optional[str]
     supplier: Optional[str]
     ecosystem: Optional[str]
+    purl_type: Optional[str]
+    purl_namespace: Optional[str]
+    purl_name: Optional[str]
     nvd_vendor: Optional[str]
     nvd_product: Optional[str]
     search_name: Optional[str]
@@ -47,10 +50,11 @@ class ComponentEnrichmentAgent:
     LangGraph-based agent for enriching SBOM components with NVD metadata.
     """
     
-    def __init__(self, db_session, ollama_url="http://localhost:11434", model="qwen2.5:7b"):
+    def __init__(self, db_session, ollama_url=None, model=None, ollama_timeout=None):
         self.db = db_session
-        self.ollama_url = ollama_url
-        self.model = model
+        self.ollama_url = ollama_url or settings.OLLAMA_URL
+        self.model = model or settings.OLLAMA_MODEL
+        self.ollama_timeout = ollama_timeout or settings.OLLAMA_TIMEOUT
         logger.info("ComponentEnrichmentAgent initialized")
     
     async def enrich_component(self, component_id: int) -> dict:
@@ -78,6 +82,9 @@ class ComponentEnrichmentAgent:
             "purl": component.purl,
             "supplier": component.supplier,
             "ecosystem": None,
+            "purl_type": None,
+            "purl_namespace": None,
+            "purl_name": None,
             "nvd_vendor": None,
             "nvd_product": None,
             "search_name": None,
@@ -122,8 +129,8 @@ class ComponentEnrichmentAgent:
     # ──────────────────────────────────────────────────────────────
     
     async def parse_purl(self, state: dict) -> dict:
-        """Node 1: Parse PURL to extract ecosystem and basic metadata."""
-        logger.info(f"[parse_purl] Processing component {state['name']}")
+        """Node 1: Parse PURL to extract ecosystem, namespace, and name per PURL spec."""
+        logger.info(f"[parse_purl] Processing PURL: {state.get('purl')}")
         
         if not state.get("purl"):
             state["error"] = "No PURL available"
@@ -132,19 +139,56 @@ class ComponentEnrichmentAgent:
         try:
             purl = state["purl"]
             if not purl.startswith("pkg:"):
-                state["error"] = "Invalid PURL format"
+                state["error"] = "Invalid PURL format: must start with pkg:"
                 return state
             
-            # Parse PURL
-            remainder = purl[4:]  # Remove "pkg:"
-            slash_idx = remainder.index("/")
-            purl_type = remainder[:slash_idx].lower()
+            # Remove "pkg:" prefix
+            remainder = purl[4:]
             
+            # Split at @ to separate package part from version
+            if "@" in remainder:
+                package_part, version_part = remainder.split("@", 1)
+            else:
+                package_part = remainder
+                version_part = ""
+            
+            # Remove qualifiers and subpath
+            if "?" in package_part:
+                package_part = package_part.split("?")[0]
+            if "#" in package_part:
+                package_part = package_part.split("#")[0]
+            
+            # Split package part into type, namespace, name
+            parts = package_part.split("/")
+            
+            if len(parts) < 2:
+                state["error"] = f"Invalid PURL: expected at least type/name, got {package_part}"
+                return state
+            
+            # Extract type
+            purl_type = parts[0].lower()
+            state["purl_type"] = purl_type
             state["ecosystem"] = purl_type
+            
+            # Extract namespace (if present)
+            if len(parts) >= 3:
+                # URL-decode namespace
+                from urllib.parse import unquote
+                # Namespace is everything between type and the last part
+                purl_namespace = unquote("/".join(parts[1:-1]))
+                state["purl_namespace"] = purl_namespace
+                # Name is the last part
+                purl_name = parts[-1]
+                state["purl_name"] = purl_name
+            else:
+                # No namespace, name is the second part
+                state["purl_namespace"] = None
+                state["purl_name"] = parts[1]
+            
             state["enrichment_method"] = "purl_only"
             state["confidence"] = 80
             
-            logger.info(f"[parse_purl] Parsed ecosystem: {purl_type}")
+            logger.info(f"[parse_purl] Parsed: type={purl_type}, namespace={state.get('purl_namespace')}, name={state.get('purl_name')}")
             return state
             
         except Exception as e:
@@ -216,7 +260,7 @@ Important:
 """
         
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=self.ollama_timeout) as client:
                 response = await client.post(
                     f"{self.ollama_url}/api/generate",
                     json={
@@ -291,6 +335,9 @@ Important:
                 return state
             
             # Update fields
+            component.purl_type = state.get("purl_type")
+            component.purl_namespace = state.get("purl_namespace")
+            component.purl_name = state.get("purl_name")
             component.nvd_vendor = state.get("nvd_vendor")
             component.nvd_product = state.get("nvd_product")
             component.search_name = state.get("search_name")

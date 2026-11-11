@@ -35,6 +35,11 @@ class Component(Base):
     enrichment_confidence = Column(Integer, nullable=True)  # 0-100 confidence in enrichment
     enrichment_method = Column(String, nullable=True)  # purl_only, purl_cache, llm, fallback_1, fallback_2, fallback_3
     
+    # PURL fields
+    purl_type = Column(String, nullable=True)  # PURL type (composer, npm, maven, golang, apk, deb)
+    purl_namespace = Column(String, nullable=True)  # PURL namespace (URL-decoded)
+    purl_name = Column(String, nullable=True)  # PURL name
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

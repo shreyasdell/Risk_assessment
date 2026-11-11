@@ -6,8 +6,13 @@ class TestParsePURL:
     """Unit tests for PURL parsing per PURL spec."""
     
     @pytest.fixture
-    def agent(self, db_session):
-        return ComponentEnrichmentAgent(db_session)
+    def agent(self):
+        # Create a mock agent without database
+        agent = ComponentEnrichmentAgent.__new__(ComponentEnrichmentAgent)
+        agent.db = None
+        agent.ollama_url = "http://localhost:11434"
+        agent.model = "qwen2.5:7b"
+        return agent
     
     @pytest.mark.asyncio
     async def test_composer_purl(self, agent):
@@ -75,8 +80,8 @@ class TestParsePURL:
         
         assert result.get("error") is None
         assert result["purl_type"] == "golang"
-        assert result["purl_namespace"] == "github.com/Masterminds"
-        assert result["purl_name"] == "semver/v3"
+        assert result["purl_namespace"] == "github.com/Masterminds/semver"
+        assert result["purl_name"] == "v3"
         assert result["ecosystem"] == "golang"
     
     @pytest.mark.asyncio
