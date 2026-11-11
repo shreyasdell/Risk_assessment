@@ -418,13 +418,22 @@ Important:
         # Don't construct CPE if vendor is None or missing
         if not state.get("nvd_vendor") or not state.get("nvd_product"):
             logger.warning(f"[construct_cpe] Missing vendor or product, skipping CPE construction")
-            state["error"] = "Missing vendor or product for CPE construction"
+            # DON'T set error - component should still be enriched with search_name
+            state["enrichment_status"] = "no_cpe"
+            state["constructed_cpe"] = None
+            # Ensure search_name is set
+            if not state.get("search_name"):
+                state["search_name"] = state["name"].replace("/", " ")
             return state
         
         # Don't construct CPE if vendor is literally "None" string
         if state["nvd_vendor"] == "None" or state["nvd_product"] == "None":
             logger.warning(f"[construct_cpe] Vendor or product is 'None' string, skipping CPE construction")
-            state["error"] = "Vendor or product is 'None' string"
+            state["enrichment_status"] = "no_cpe"
+            state["constructed_cpe"] = None
+            # Ensure search_name is set
+            if not state.get("search_name"):
+                state["search_name"] = state["name"].replace("/", " ")
             return state
         
         # Don't construct CPE if contains invalid characters (/, spaces, etc.)
@@ -432,7 +441,11 @@ Important:
         for char in invalid_chars:
             if char in state["nvd_vendor"] or char in state["nvd_product"]:
                 logger.warning(f"[construct_cpe] Invalid character '{char}' in vendor/product, skipping CPE construction")
-                state["error"] = f"Invalid character '{char}' in vendor/product"
+                state["enrichment_status"] = "no_cpe"
+                state["constructed_cpe"] = None
+                # Ensure search_name is set
+                if not state.get("search_name"):
+                    state["search_name"] = state["name"].replace("/", " ")
                 return state
         
         try:
@@ -475,11 +488,21 @@ Important:
             component.purl_name = state.get("purl_name")
             component.nvd_vendor = state.get("nvd_vendor")
             component.nvd_product = state.get("nvd_product")
-            component.search_name = state.get("search_name")
+            
+            # Always build search_name from purl_namespace + " " + purl_name for namespaced ecosystems
+            if state.get("purl_namespace") and state.get("purl_name"):
+                # Check if namespace is redundant (e.g., guzzlehttp/guzzle → guzzle)
+                if state["purl_namespace"].lower() in state["purl_name"].lower():
+                    component.search_name = state["purl_name"]
+                else:
+                    component.search_name = f"{state['purl_namespace']} {state['purl_name']}"
+            else:
+                component.search_name = state.get("search_name", state["name"])
+            
             component.clean_version = state.get("clean_version")
             component.constructed_cpe = state.get("constructed_cpe")
             component.ecosystem = state.get("ecosystem")
-            component.enrichment_status = "completed"
+            component.enrichment_status = state.get("enrichment_status", "completed")
             component.enrichment_confidence = state.get("confidence")
             component.enrichment_method = state.get("enrichment_method")
             
