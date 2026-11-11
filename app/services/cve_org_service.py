@@ -595,16 +595,17 @@ Analyze whether this CVE affects the component. Consider:
 3. Is the component in the ecosystem this CVE targets?
 
 Respond in JSON format:
-{{"is_affected": true/false, "confidence": 0-100, "reasoning": "explanation"}}
+{{"is_affected": true/false, "confidence": 0-100, "reasoning": "explanation", "affected_product": "product name", "affected_range": "version range (e.g., '< 2.0.0', '>= 1.0.0, < 2.0.0')"}}
 
 Examples:
-- Component: "binutils", Version: "2.34", CVE about "binutils 2.34 allows remote attackers..." -> {{"is_affected": true, "confidence": 85, "reasoning": "Description explicitly mentions binutils 2.34"}}
-- Component: "openssl", Version: "1.1.1", CVE about "log4j" -> {{"is_affected": false, "confidence": 90, "reasoning": "CVE affects log4j, not openssl"}}"""
+- Component: "binutils", Version: "2.34", CVE about "binutils 2.34 allows remote attackers..." -> {{"is_affected": true, "confidence": 85, "reasoning": "Description explicitly mentions binutils 2.34", "affected_product": "binutils", "affected_range": "2.34"}}
+- Component: "openssl", Version: "1.1.1", CVE about "log4j" -> {{"is_affected": false, "confidence": 90, "reasoning": "CVE affects log4j, not openssl", "affected_product": "log4j", "affected_range": "N/A"}}"""
 
         try:
             import httpx
             import json
             import re
+            from packaging import version as pkg_version
 
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.post(
@@ -631,8 +632,44 @@ Examples:
                             parsed = {}
 
                     is_affected = parsed.get("is_affected", False)
-                    confidence = parsed.get("confidence", 50)
+                    llm_confidence = parsed.get("confidence", 50)
+                    # CAP CONFIDENCE AT 75
+                    confidence = min(llm_confidence, 75)
                     reasoning = parsed.get("reasoning", "LLM analysis")
+                    affected_product = parsed.get("affected_product", "")
+                    affected_range = parsed.get("affected_range", "")
+
+                    # Check if product is different (hard REJECT)
+                    if affected_product and affected_product.lower() not in component_name.lower():
+                        return (False, 95, f"LLM analysis: CVE affects {affected_product}, not {component_name}")
+
+                    # If no range, return NEEDS_REVIEW (50)
+                    if not affected_range or affected_range == "N/A":
+                        return (False, 50, f"LLM analysis: No version range specified, needs manual review - {reasoning}")
+
+                    # Try to compare versions using packaging
+                    try:
+                        # Simple version comparison for common patterns
+                        if "<" in affected_range:
+                            parts = affected_range.split("<")
+                            if len(parts) == 2:
+                                max_version = parts[1].strip()
+                                try:
+                                    if pkg_version.parse(component_version) < pkg_version.parse(max_version):
+                                        return (True, confidence, f"LLM analysis: {reasoning} (version {component_version} < {max_version})")
+                                except:
+                                    pass
+                        elif ">" in affected_range:
+                            parts = affected_range.split(">")
+                            if len(parts) == 2:
+                                min_version = parts[1].strip()
+                                try:
+                                    if pkg_version.parse(component_version) > pkg_version.parse(min_version):
+                                        return (True, confidence, f"LLM analysis: {reasoning} (version {component_version} > {min_version})")
+                                except:
+                                    pass
+                    except Exception as e:
+                        print(f"[CVE.org] Version comparison failed: {e}")
 
                     return (
                         is_affected,
@@ -644,7 +681,7 @@ Examples:
             print(f"[CVE.org] LLM analysis failed for {cve_id}: {e}")
 
         # Fallback: mark as uncertain
-        return (False, 25, "LLM analysis failed - CVE predates structured data, manual review required")
+        return (False, 50, "LLM analysis failed - CVE predates structured data, manual review required")
 
 
 # Singleton
