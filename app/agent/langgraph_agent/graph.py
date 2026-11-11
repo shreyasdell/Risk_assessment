@@ -540,17 +540,6 @@ Important:
         
         state["error"] = "Could not extract vendor from PURL, component name, or existing CPE"
         return state
-                    state["nvd_vendor"] = parts[3]
-                    state["nvd_product"] = parts[4]
-                    state["constructed_cpe"] = component.cpe
-                    state["enrichment_method"] = "fallback_1"
-                    state["confidence"] = 60
-                    return state
-            except:
-                pass
-        
-        state["error"] = "Fallback 1 failed"
-        return state
     
     async def fallback_2(self, state: dict) -> dict:
         """Fallback 2: Use ComponentNormalizer."""
