@@ -122,6 +122,15 @@ class ComponentEnrichmentAgent:
                     self._cache_result(state)
                 else:
                     logger.warning(f"[enrich_pipeline] LLM result not validated, skipping cache")
+            
+            # Run fallbacks if confidence is too low (configurable, default 60)
+            if not state.get("error") and state.get("confidence", 0) < 60:
+                logger.warning(f"[enrich_pipeline] Confidence {state.get('confidence')} below threshold 60, running fallbacks")
+                state = await self.fallback_1(state)
+                if state.get("error"):
+                    state = await self.fallback_2(state)
+                    if state.get("error"):
+                        state = await self.fallback_3(state)
         
         # Step 4: Construct CPE
         if not state.get("error") and state.get("nvd_vendor"):
@@ -296,7 +305,9 @@ Important:
                 
                 state["nvd_vendor"] = parsed.get("nvd_vendor")
                 state["nvd_product"] = parsed.get("nvd_product")
-                state["confidence"] = parsed.get("confidence", 70)
+                # Cap LLM confidence at 75
+                llm_confidence = parsed.get("confidence", 70)
+                state["confidence"] = min(llm_confidence, 75)
                 state["enrichment_method"] = "llm"
                 
                 # Cache the result (will be re-cached after validation)
