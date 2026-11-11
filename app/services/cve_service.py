@@ -28,7 +28,7 @@ def get_cves(
         # Use subquery to avoid DISTINCT on JSON columns
         from sqlalchemy import func
         
-        # Get distinct CVE IDs
+        # Get distinct CVE IDs (no ORDER BY in subquery)
         cve_ids_subquery = db.query(CVE.id).join(CVE.components).join(Component.application)
         if severity:
             cve_ids_subquery = cve_ids_subquery.filter(CVE.severity == severity)
@@ -43,11 +43,11 @@ def get_cves(
         # Get total count
         total = cve_ids_subquery.count()
         
-        # Get CVE IDs for pagination
-        cve_ids = cve_ids_subquery.order_by(CVE.cvss_score.desc()).offset(skip).limit(limit).all()
+        # Get CVE IDs for pagination (no ORDER BY in subquery)
+        cve_ids = cve_ids_subquery.offset(skip).limit(limit).all()
         cve_ids = [id for (id,) in cve_ids]
         
-        # Get full CVE objects
+        # Get full CVE objects and sort them
         cves = db.query(CVE).filter(CVE.id.in_(cve_ids)).order_by(CVE.cvss_score.desc()).all()
     else:
         # Get all CVEs - no join needed
