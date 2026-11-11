@@ -23,7 +23,12 @@ def get_cves(
     distinct: bool = True
 ) -> Tuple[List[CVE], int]:
     """Get CVEs with total count for pagination."""
-    query = db.query(CVE).join(CVE.components).join(Component.application)
+    if application_id:
+        # Filter by application - join with components and application
+        query = db.query(CVE).join(CVE.components).join(Component.application)
+    else:
+        # Get all CVEs - no join needed
+        query = db.query(CVE)
     
     if severity:
         query = query.filter(CVE.severity == severity)
