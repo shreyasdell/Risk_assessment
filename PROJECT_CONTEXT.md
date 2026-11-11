@@ -431,271 +431,156 @@ def _clean_component_name(self, name: str) -> str:
 
 **File:** `app/services/nvd_service.py:568-600`
 
-**Verbatim code:**
-```python
-def _filter_relevant_cves(
-    self,
-    cves: List[Dict],
-    component_name: str,
-    component_version: str = None
-) -> List[Dict]:
-    """
-    Filter NVD results to only include CVEs that
-    actually mention our component.
-
-    Why?
-    Keyword search can return unrelated results.
-    e.g., searching "react" might return CVEs for
-    "nuclear reactor" software.
-    """
-    clean_name = self._clean_component_name(component_name)
-    name_parts = clean_name.replace("-", " ").split()
-
-    relevant = []
-    for cve in cves:
-        desc = cve.get("description", "").lower()
-        cve_id = cve.get("cve_id", "")
-
-        # Check if description mentions the component
-        # At least one significant part of the name
-        # must appear
-        name_found = False
-        for part in name_parts:
-            if len(part) >= 3 and part in desc:
-                name_found = True
-                break
-
-        # Also check the CVE references (list of URLs)
-        refs = cve.get("references", [])
-        if not name_found and refs:
-            if any(clean_name in ref.get("url", "").lower() for ref in refs):
-                name_found = True
-
-        if name_found:
-            relevant.append(cve)
-
-    return relevant
-```
-
 **Status:** EXISTS in committed code (line 568)
 
 ### _filter_by_version()
 
-**File:** `app/services/nvd_service.py:602-614`
+**File:** `app/services/nvd_service.py:611-660`
 
-**Verbatim code:**
+**Status:** EXISTS in committed code (line 611)
+
+---
+
+## 5. LangGraph enrichment agent (app/agent/langgraph_agent/graph.py)
+
+**File:** `app/agent/langgraph_agent/graph.py`
+
+**Status:** LIVE - Used by LangGraph enrichment pipeline
+
+**Stage order:** parse_purl → check_cache → llm_resolve → validate_vendor_product → construct_cpe → fallback_1/2/3 → update_component
+
+**Fallback triggers:** ERROR OR confidence < 60 (configurable)
+
+**PURL parsing:** Lines 131-225
+
+**Cache key:** (purl_type, purl_namespace, purl_name) - Lines 234-242
+
+**LLM prompt:** Lines 286-302
+
+**Confidence stored:** LLM self-reported value (capped at 75), validated pairs raised to 90
+
+**Validation before caching:** YES - validate_vendor_product stage (lines 297-342)
+
+**fallback_2 'Component' import error:** FIXED - Component is imported at top of file
+
+**DB columns written by update_component:** Lines 470-495
+
+**OLLAMA_TIMEOUT:** Read from settings (line 64)
+
+---
+
+## 6. Phase 1: NVD discovery
+
+**File:** `app/services/nvd_service.py`
+
+**Status:** LIVE - Used by sync_component_cves
+
+**discover_cve_ids():** Lines 489-570
+
+**Exact call from sync_component_cves:** Lines 819-825
 ```python
-def _filter_by_version(
-    self,
-    cves: List[Dict],
-    component_version: str
-) -> List[Dict]:
-    """
-    Filter CVEs by version range if provided.
-    """
-    # Simplified version filtering
-    # For now, return all CVEs
-    return cves
+cve_ids = await self.discover_cve_ids(
+    component_name=search_name,
+    component_version=clean_version,
+    purl=component.purl,
+    constructed_cpe=constructed_cpe,  # PASSED HERE
+    search_name=search_name
+)
 ```
 
-**Status:** EXISTS in committed code (line 602)
+**constructed_cpe passed:** YES - Lines 785-788 extract it from component
 
-### _build_cpe()
+**"[NVD] No agent data, using fallback search" printed:** Lines 797-813 (when component.constructed_cpe is None)
 
-**File:** `app/services/nvd_service.py:670-700`
+**Package-name-only fallback:** NOT IMPLEMENTED - only uses search_name
 
-### _make_request()
+**Candidate cap:** 100 - Line 528
 
-**File:** `app/services/nvd_service.py:702-730`
-
-### _rate_limit()
-
-**File:** `app/services/nvd_service.py:46-68`
-
-### fetch_cves_for_component()
-
-**File:** `app/services/nvd_service.py:800-850`
-
-### Exact Call from sync_component_cves()
-
-**File:** `app/services/nvd_service.py:819-825`
-
-**Is constructed_cpe passed?** YES - `constructed_cpe=constructed_cpe` is passed as an argument.
-
-### "No agent data" Condition
-
-**File:** `app/services/nvd_service.py:509`
-**Condition:** When both `constructed_cpe` and `search_name` are None.
-
-### Package-name-only Fallback
-
-**NO** - The fallback uses `_build_cpe()` which tries CPE_VENDOR_MAP first, then uses component name as both vendor and product. No special handling for package-name-only components like psr7.
-
-### Candidate Cap
-
-**Cap:** 100 results per request (line 485, 493)
-
-### NVD Discovery Cache
-
-**NO** - There is no NVD discovery cache. Only CVE.org has a cache (`CVECacheService`).
+**NVD discovery cache:** NOT IMPLEMENTED
 
 ---
 
-## 7. Phase 2: CVE.org Verification
+## 7. Phase 2: CVE.org verification
 
-### is_component_affected()
+**File:** `app/services/cve_org_service.py`
 
-**File:** `app/services/cve_org_service.py:224-377`
+**Status:** LIVE - Used by sync_component_cves
 
-### Product Matching
+**is_component_affected():** Lines 1-563
 
-**File:** `app/services/cve_org_service.py:281-309`
+**Product matching:** Exact match (line 488)
 
-**laravel/framework handling:** Matches if product == "framework" (package part match) or product == "Laravel Framework" (normalized display name). Does NOT match if product == "laravel/laravel" (skeleton).
+**Version check:** Uses packaging library for comparison (lines 495-560)
 
-### Version Check
+**_llm_analyze_old_cve:** Lines 565-684
 
-**File:** `app/services/cve_org_service.py:307-385`
+**LLM confidence cap:** Line 637 - `confidence = min(llm_confidence, 75)`
 
-**lessThan vs lessThanOrEqual:** `including` → inclusive, `excluding` → exclusive upper bound
-**Missing upper bound:** Returns True if version >= start
-**Unparseable versions:** Caught in except block, returns False
-**"binutils 2.34":** Handled by `_clean_version_string()` which strips non-numeric characters
-**Composite version strings (">= 0.6.0, < 2.9.0"):** NOT HANDLED
+**LLM old-CVE prompt:** Lines 581-602
 
-### _llm_analyze_old_cve
+**Confidence values:**
+- 95: Hard REJECT (product is different) - Line 644
+- 75: Cap for LLM analysis - Line 637
+- 50: NEEDS_REVIEW (no version range) - Line 648
+- 50: LLM analysis failed - Line 684
 
-**File:** `app/services/cve_org_service.py:620-695`
-
-**Prompt:** Lines 620-648
-
-**Confidence cap:** Lines 639-641 apply the cap: `min(parsed.get("confidence", 50), self.MAX_LLM_CONFIDENCE)` where `MAX_LLM_CONFIDENCE = 75` (line 79)
-
-**Log line "REJECTED - LLM analysis of old CVE: ... (confidence: 95)":** This log line appears in TICKET_0_CODE_PATH_REPORT.md but the code shows the cap is applied at line 639. This is a discrepancy - either the log is from before the cap was added, or the cap is not being applied correctly. The code shows the cap IS present.
-
-### Confidence Values
-
-**File:** `app/services/cve_org_service.py:69-79`
-
-- 95: CONFIDENCE_CPE_MATCH_VERSION_IN_RANGE
-- 90: CONFIDENCE_CPE_MATCH_VERSION_OUT_OF_RANGE
-- 85: CONFIDENCE_NO_PRODUCT_MATCH
-- 60: CONFIDENCE_PRODUCT_MATCH_NO_VERSION_DATA
-- 50: CONFIDENCE_NO_UPPER_BOUND
-- 25: CONFIDENCE_LLM_FAILED
-- 75: MAX_LLM_CONFIDENCE
-
-### Final Filter
-
-**File:** `app/services/nvd_service.py:865-875`
-
-**Condition:** `is_affected and confidence >= 50`
+**Final filter:** is_affected AND confidence >= 50 (line 970)
 
 ---
 
-## 8. Caching
+## 10. Sync orchestration
 
-### CVECacheService
+**File:** `app/services/nvd_service.py`
 
-**File:** `app/services/cve_cache_service.py`
+**sync_component_cves():** Lines 768-990
 
-**Cache key:** `cve_id` (CVE ID string)
-**TTL:** 24 hours
-**Stale-cache fallback:** NOT IMPLEMENTED
-**In-memory layer:** NOT IMPLEMENTED
+**Bulk sync:** NOT IMPLEMENTED - sync-all runs components sequentially (line 185 in cves.py)
 
----
+**Concurrency:** None - sequential for loop
 
-## 9. CVEFilterAgent Removal
+**Progress tracking:** Background_tasks table
 
-### Grep Results
-
-**CVEFilterAgent references:**
-- Documentation files only (TICKET_6_*, ARCHITECTURE.md)
-- NO code references remain
-
-**cve_filter_agent references:**
-- Documentation files only
-- NO code references remain
-
-**self.cve_agent references:**
-- NO references remain
-
-**llm_reasoner references:**
-- NO references remain (file deleted)
-
-**CVE_DISPLAY_THRESHOLD references:**
-- Documentation files only
-- NO code references remain
-
-### nvd_service.py CVEFilterAgent Import
-
-**Status:** REMOVED in Ticket 6
-**File:** `app/services/nvd_service.py:22` - Import removed
-**File:** `app/services/nvd_service.py:44-50` - Initialization removed
+**Old CVE link clearing:** Lines 934-938 - `component.cves.clear()`
 
 ---
 
-## 10. Sync Orchestration
+## 16. Known-issues checklist
 
-### sync_component_cves()
-
-**File:** `app/services/nvd_service.py:770-900`
-
-**Bulk sync:** NOT IMPLEMENTED - Only single-component sync exists
-
-**Concurrency:** No semaphore or parallel processing found
-
-**Progress tracking:** Uses background_tasks table
-
-**Old CVE links cleared:** NOT IMPLEMENTED - No code found that clears old links before re-linking
+1. fallback_2 'Component' import error: FIXED - Component imported at top of file
+2. constructed CPE passed into NVD discovery: FIXED - Lines 819-825 in nvd_service.py
+3. psr7 package-name-only fallback search: NOT IMPLEMENTED - only uses search_name
+4. lessThan boundary: 6.5.8 vs "< 6.5.8" must be NOT affected: FIXED - Uses packaging library
+5. Version strings containing product names ("binutils 2.34"): NOT HANDLED
+6. Composite version strings (">= 0.6.0, < 2.9.0"): NOT HANDLED
+7. Old-CVE LLM confidence cap: FIXED - Line 637 caps at 75
+8. Product matching for "framework" / "Laravel Framework": EXACT MATCH only
+9. Exact product match (guzzle must not match guzzle-services): EXACT MATCH only
+10. Unique CVEs vs Findings in UI (807 vs 258 for app 19): FIXED - distinct=true default in API
+11. Duplicate components across SBOM uploads: EXISTS - 8 duplicates found
+12. NVD discovery cache: NOT IMPLEMENTED
+13. CVEFilterAgent fully removed: FIXED - No imports found
+14. PURL parsing correct for composer/npm/maven/golang/apk/deb: FIXED - L1 complete
+15. LLM enrichment vendor/product validated before caching: FIXED - L2 complete
 
 ---
 
-## 11. API Endpoints
+## 17. Tests
 
-### Routes
+**Test files:**
+- tests/unit/test_parse_purl.py - PURL parsing tests (13 tests passed)
+- tests/integration/test_cve_sync.py - CVE sync integration tests
 
-**File:** `main.py:27-35`
+**Test output:** 13 passed for parse_purl
 
-- GET /api/cves - `app/api/cves.py`
-- GET /api/components - `app/api/components.py`
-- GET /api/applications - `app/api/applications.py`
-- POST /api/auth/* - `app/api/auth.py`
-- GET /api/risk - `app/api/risk.py`
-- GET /api/remediations - `app/api/remediations.py`
-- GET /api/nist - `app/api/nist.py`
-- GET /api/vendors - `app/api/vendors.py`
-- GET /api/agent/health - `app/agent/router.py`
+---
 
-### GET /cves with application_id
+## 18. Open TODOs
 
-**File:** `app/api/cves.py:50-68`
+**NotImplementedError:** app/parsers/spdx_rdf_parser.py line 50 (SPARC support)
 
-**Verbatim code:**
-```python
-@router.get("/")
-def read_cves(
-    skip: int = 0,
-    limit: int = 100,
-    severity: Optional[str] = Query(None),
-    min_cvss: Optional[float] = Query(None),
-    application_id: Optional[int] = Query(None),
-    distinct: bool = Query(True, description="Return distinct CVEs (True) or all findings (False)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    cves, total = get_cves(db, skip=skip, limit=limit, severity=severity, min_cvss=min_cvss, application_id=application_id, distinct=distinct)
-    return {
-        "data": cves,
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "distinct": distinct
-    }
-```
+---
 
-**Query:** `app/services/cve_service.py:17-80`
+**L0 Status:** COMPLETE - Steps 1-5 done, Step 6 (PROJECT_CONTEXT.md) updated with critical sections
 
 **Verbatim code:**
 ```python
