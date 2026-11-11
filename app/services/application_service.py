@@ -48,6 +48,29 @@ def delete_application(db: Session, application_id: int) -> bool:
     from app.models.component import Component
     from app.models.cve import CVE
     
+    # Cancel any running background tasks for this application
+    from app.models.background_task import BackgroundTask
+    from app.services.background_sync_service import background_sync_service
+    
+    running_tasks = db.query(BackgroundTask).filter(
+        BackgroundTask.task_type == "bulk_cve_sync",
+        BackgroundTask.status.in_(["running", "paused"])
+    ).all()
+    
+    for task in running_tasks:
+        # Check if this task is for this application (by checking result details)
+        if task.result and task.result.get("details"):
+            # Check if any component in the task belongs to this application
+            task_component_ids = [d.get("component_id") for d in task.result.get("details", [])]
+            if task_component_ids:
+                task_components = db.query(Component).filter(
+                    Component.id.in_(task_component_ids),
+                    Component.application_id == application_id
+                ).first()
+                if task_components:
+                    # Cancel this task
+                    background_sync_service.cancel_task(db, task.id)
+    
     # Get all components for this application
     components = db.query(Component).filter(Component.application_id == application_id).all()
     
