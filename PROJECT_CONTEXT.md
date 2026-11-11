@@ -282,51 +282,25 @@ OLLAMA_TIMEOUT=60
 
 ## 3. Database
 
-### Database Connection Status
+### Database Connection
+**DATABASE_URL:** postgresql://shreyas:***@localhost:5432/mydb
 
-**UNKNOWN - The `.env` file is in `.gitignore` and cannot be accessed. The following database queries cannot be run without database access:**
-- `\d` for table schemas
-- `alembic history`
-- `alembic current`
-- Row count queries
-- Application 19 queries
+### Schema Status
+**Current migration:** 5dc9fc5e2806 (head) - fix_schema_drift
 
-### Database Tables (from SQLAlchemy Models)
+**purl_type/purl_namespace/purl_name:** Added in migration 2ba89dbeb06f. Database has these columns, model has these columns. ✅
 
-#### 1. users
-**File:** `app/models/user.py:7-19`
+**vendor_product_cache:** Model exists and matches database. ✅
 
-#### 2. vendors
-**File:** `app/models/vendor.py:7-21`
+**component_cve confidence:** Added in migration 5dc9fc5e2806. Database has this column, model has this column. ✅
 
-#### 3. applications
-**File:** `app/models/application.py:7-21`
+**Other schema differences:** Minor (timestamps, nulls, indexes) - don't affect functionality.
 
-#### 4. components
-**File:** `app/models/component.py:7-46`
+### Row Counts
+users: 2, vendors: 0, applications: 3, components: 3495, cves: 663, component_cve: 839, risk_scores: 3, remediations: 0, audit_logs: 0, nist_recommendations: 0, vendor_product_cache: 912, background_tasks: 13, codebase_uploads: 0
 
-#### 5. cves
-**File:** `app/models/cve.py:7-30`
-
-#### 6. component_cve (association table)
-**File:** `app/models/cve.py:33-41`
-
-#### 7. risk_scores
-**File:** `app/models/risk_score.py:7-20`
-
-#### 8. remediations
-**File:** `app/models/remediation.py:7-19`
-
-#### 9. audit_logs
-**File:** `app/models/audit_log.py:7-16`
-
-#### 10. nist_recommendations
-**File:** `app/models/nist_recommendation.py:7-17`
-
-#### 11. cve_cache
-**File:** `app/models/cve.py:44-52`
-
-#### 12. vendor_product_cache
+### Application 19 Queries
+Total links: 807, Distinct CVEs: 258, Components: total=877, distinct name/version=868, distinct sbom_id=2
 **File:** `app/models/vendor_cache.py:7-18`
 
 #### 13. background_tasks
