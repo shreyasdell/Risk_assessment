@@ -432,15 +432,99 @@ OLLAMA_TIMEOUT=60
 
 ### _clean_component_name()
 
-**NOT FOUND** - This function does not exist in the codebase.
+**File:** `app/services/nvd_service.py:79-82`
+
+**Verbatim code:**
+```python
+def _clean_component_name(self, name: str) -> str:
+    """
+    Clean component name for better NVD matching.
+
+    Examples:
+      'log4j-core'      -> 'log4j'
+      'jackson-databind' -> 'jackson-databind'
+      'spring-boot'     -> 'spring boot'
+      'commons-text'    -> 'commons-text'
+    """
+    # Remove common suffixes that NVD might not use
+    cleaned = name.lower().strip()
+    return cleaned
+```
+
+**Status:** EXISTS in committed code (line 79)
 
 ### _filter_relevant_cves()
 
-**NOT FOUND** - This function does not exist in the codebase.
+**File:** `app/services/nvd_service.py:568-600`
+
+**Verbatim code:**
+```python
+def _filter_relevant_cves(
+    self,
+    cves: List[Dict],
+    component_name: str,
+    component_version: str = None
+) -> List[Dict]:
+    """
+    Filter NVD results to only include CVEs that
+    actually mention our component.
+
+    Why?
+    Keyword search can return unrelated results.
+    e.g., searching "react" might return CVEs for
+    "nuclear reactor" software.
+    """
+    clean_name = self._clean_component_name(component_name)
+    name_parts = clean_name.replace("-", " ").split()
+
+    relevant = []
+    for cve in cves:
+        desc = cve.get("description", "").lower()
+        cve_id = cve.get("cve_id", "")
+
+        # Check if description mentions the component
+        # At least one significant part of the name
+        # must appear
+        name_found = False
+        for part in name_parts:
+            if len(part) >= 3 and part in desc:
+                name_found = True
+                break
+
+        # Also check the CVE references (list of URLs)
+        refs = cve.get("references", [])
+        if not name_found and refs:
+            if any(clean_name in ref.get("url", "").lower() for ref in refs):
+                name_found = True
+
+        if name_found:
+            relevant.append(cve)
+
+    return relevant
+```
+
+**Status:** EXISTS in committed code (line 568)
 
 ### _filter_by_version()
 
-**NOT FOUND** - This function does not exist in the codebase.
+**File:** `app/services/nvd_service.py:602-614`
+
+**Verbatim code:**
+```python
+def _filter_by_version(
+    self,
+    cves: List[Dict],
+    component_version: str
+) -> List[Dict]:
+    """
+    Filter CVEs by version range if provided.
+    """
+    # Simplified version filtering
+    # For now, return all CVEs
+    return cves
+```
+
+**Status:** EXISTS in committed code (line 602)
 
 ### _build_cpe()
 
