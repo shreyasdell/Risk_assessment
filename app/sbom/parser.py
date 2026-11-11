@@ -8,6 +8,45 @@ class SBOMParser:
     """Base parser for SBOM files"""
 
     @staticmethod
+    def _parse_purl(purl: str) -> tuple:
+        """
+        Parse PURL into (purl_type, purl_namespace, purl_name).
+        
+        Args:
+            purl: Package URL string (e.g., "pkg:composer/laravel/framework@7.30.6")
+        
+        Returns:
+            tuple: (purl_type, purl_namespace, purl_name) or (None, None, None) if invalid
+        """
+        if not purl or not purl.startswith("pkg:"):
+            return None, None, None
+        
+        # Remove "pkg:" prefix
+        purl = purl[4:]
+        
+        # Split by "/" to get type, namespace, name
+        parts = purl.split("/")
+        if len(parts) < 2:
+            return None, None, None
+        
+        purl_type = parts[0]  # composer, npm, maven, pypi, golang, apk, deb
+        
+        # Extract namespace and name
+        if len(parts) >= 3:
+            # Format: type/namespace/name@version
+            purl_namespace = parts[1]
+            purl_name_with_version = parts[2]
+        else:
+            # Format: type/name@version (no namespace)
+            purl_namespace = None
+            purl_name_with_version = parts[1]
+        
+        # Remove version and qualifiers
+        purl_name = purl_name_with_version.split("@")[0].split("?")[0]
+        
+        return purl_type, purl_namespace, purl_name
+
+    @staticmethod
     def _extract_name_from_purl(purl: str, original_name: str) -> str:
         """
         Extract full package name from PURL for ecosystems where the name field is incomplete.
@@ -112,6 +151,9 @@ class SBOMParser:
         license_info = comp.get("licenses", [{}])[0].get("license", {}).get("id") if comp.get("licenses") else None
         cpe = comp.get("cpe")
 
+        # Parse PURL to extract purl_type, purl_namespace, purl_name
+        purl_type, purl_namespace, purl_name = SBOMParser._parse_purl(purl)
+
         # Enrich name from PURL for ecosystems where name field is incomplete
         # This fixes Composer packages where name is just "framework" but PURL has "laravel/framework"
         enriched_name = SBOMParser._extract_name_from_purl(purl, name)
@@ -121,6 +163,9 @@ class SBOMParser:
             version=version,
             component_type=component_type_enum,
             purl=purl,
+            purl_type=purl_type,
+            purl_namespace=purl_namespace,
+            purl_name=purl_name,
             supplier=supplier,
             description=description,
             license=license_info,
@@ -159,12 +204,18 @@ class SBOMParser:
                     # Enrich name from PURL for ecosystems where name field is incomplete
                     purl_text = purl.text if purl is not None else None
                     enriched_name = SBOMParser._extract_name_from_purl(purl_text, name.text)
+                    
+                    # Parse PURL to extract purl_type, purl_namespace, purl_name
+                    purl_type, purl_namespace, purl_name = SBOMParser._parse_purl(purl_text)
 
                     component = ComponentCreate(
                         name=enriched_name,
                         version=version.text,
                         component_type=component_type_enum,
                         purl=purl_text,
+                        purl_type=purl_type,
+                        purl_namespace=purl_namespace,
+                        purl_name=purl_name,
                         supplier=supplier.text if supplier is not None else None,
                         description=description.text if description is not None else None,
                         license=license_info,
