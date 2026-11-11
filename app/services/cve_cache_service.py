@@ -88,12 +88,16 @@ class CVECacheService:
             if raw_response:
                 cve_record.cveorg_raw = raw_response
         else:
-            # CVE does not exist yet — it will be created
-            # by the NVD sync process, so we just skip caching
-            # for now. The cache will be populated on next sync.
-            pass
+            # CVE does not exist yet — create it so we can cache
+            cve_record = CVE(
+                cve_id=cve_id_str,
+                cveorg_affected_products=affected_products,
+                cveorg_fetched_at=datetime.utcnow(),
+                cveorg_raw=raw_response
+            )
+            db.add(cve_record)
 
-        db.flush()
+        db.commit()
 
     async def get_affected_products(
         self,

@@ -143,8 +143,8 @@ class ComponentEnrichmentAgent:
                     if state.get("error"):
                         state = await self.fallback_3(state)
         
-        # Step 4: Construct CPE
-        if not state.get("error") and state.get("nvd_vendor"):
+        # Step 4: Construct CPE (only if we have vendor/product and no error)
+        if not state.get("error") and state.get("nvd_vendor") and state.get("nvd_product"):
             state = await self.construct_cpe(state)
         
         # Step 5: Fallback chain if errors
