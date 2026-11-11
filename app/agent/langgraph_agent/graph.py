@@ -59,6 +59,12 @@ class ComponentEnrichmentAgent:
     # In-memory cache (simple dict for now, could use LRU cache)
     _memory_cache = {}
     
+    # Generic names that should not be used alone for keyword search
+    GENERIC_NAMES = {
+        "proxy", "math", "lexer", "process", "framework", "core", "utils",
+        "common", "base", "helper", "lib", "library", "api", "client", "server"
+    }
+    
     def __init__(self, db_session, ollama_url=None, model=None, ollama_timeout=None):
         self.db = db_session
         self.ollama_url = ollama_url or settings.OLLAMA_URL
@@ -302,17 +308,21 @@ Supplier: {state.get('supplier', 'N/A')}
 
 Return JSON:
 {{
-    "nvd_vendor": "vendor name",
-    "nvd_product": "product name",
+    "nvd_vendor": "vendor name (e.g., 'laravel', 'apache', 'nodejs', 'python', 'brick', 'dragonmantank')",
+    "nvd_product": "product name (e.g., 'framework', 'httpd', 'express', 'requests', 'math', 'cron-expression')",
+    "search_name": "search term for NVD keyword search (use 'vendor package' format with space, e.g., 'brick math', 'dragonmantank cron-expression', 'fideloper proxy', 'doctrine lexer'. NEVER use generic names like 'math', 'proxy', 'lexer' alone)",
     "confidence": 0-100,
     "reasoning": "explanation"
 }}
 
 Important:
 - Use the actual NVD vendor/product names as they appear in NVD CPE strings
+- For composer packages (vendor/package), vendor is the first part (e.g., 'brick' for 'brick/math')
 - For npm packages, vendor is often "nodejs" or the organization name
 - For Python packages, vendor is often "python" or the organization name
 - For Java packages, vendor is often "apache", "oracle", "eclipse", etc.
+- search_name MUST be in 'vendor package' format with space (e.g., 'brick math'), NEVER just the product part
+- NEVER use generic names alone: proxy, math, lexer, process, framework, core, utils, common, base, helper, lib, library, api, client, server
 - Be specific and accurate
 """
         
@@ -337,6 +347,7 @@ Important:
                 
                 state["nvd_vendor"] = parsed.get("nvd_vendor")
                 state["nvd_product"] = parsed.get("nvd_product")
+                state["search_name"] = parsed.get("search_name", state["name"])  # Default to component name
                 # Cap LLM confidence at 75
                 llm_confidence = parsed.get("confidence", 70)
                 state["confidence"] = min(llm_confidence, 75)
@@ -404,9 +415,25 @@ Important:
         """Node 4: Construct CPE string from resolved vendor/product."""
         logger.info(f"[construct_cpe] Building CPE for {state['name']}")
         
+        # Don't construct CPE if vendor is None or missing
         if not state.get("nvd_vendor") or not state.get("nvd_product"):
+            logger.warning(f"[construct_cpe] Missing vendor or product, skipping CPE construction")
             state["error"] = "Missing vendor or product for CPE construction"
             return state
+        
+        # Don't construct CPE if vendor is literally "None" string
+        if state["nvd_vendor"] == "None" or state["nvd_product"] == "None":
+            logger.warning(f"[construct_cpe] Vendor or product is 'None' string, skipping CPE construction")
+            state["error"] = "Vendor or product is 'None' string"
+            return state
+        
+        # Don't construct CPE if contains invalid characters (/, spaces, etc.)
+        invalid_chars = [" ", "/", "\\", "(", ")", "{", "}", "<", ">"]
+        for char in invalid_chars:
+            if char in state["nvd_vendor"] or char in state["nvd_product"]:
+                logger.warning(f"[construct_cpe] Invalid character '{char}' in vendor/product, skipping CPE construction")
+                state["error"] = f"Invalid character '{char}' in vendor/product"
+                return state
         
         try:
             # Clean version
@@ -417,8 +444,10 @@ Important:
             cpe = f"cpe:2.3:a:{state['nvd_vendor']}:{state['nvd_product']}:{clean_ver}:*:*:*:*:*:*:*"
             state["constructed_cpe"] = cpe
             
-            # Generate search name (for keyword fallback)
-            state["search_name"] = state["nvd_product"]
+            # Generate search name (use component name as default, not just product)
+            if not state.get("search_name"):
+                # Replace "/" with space in search_name for NVD keyword search
+                state["search_name"] = state["name"].replace("/", " ")
             
             logger.info(f"[construct_cpe] Built CPE: {cpe}")
             return state
@@ -465,16 +494,52 @@ Important:
             return state
     
     async def fallback_1(self, state: dict) -> dict:
-        """Fallback 1: Use existing CPE from component."""
-        logger.info(f"[fallback_1] Using existing CPE for {state['name']}")
+        """Fallback 1: Extract vendor from PURL or component name."""
+        logger.info(f"[fallback_1] Extracting vendor from PURL/component name for {state['name']}")
         
+        # Try to extract vendor from PURL
+        if state.get("purl"):
+            purl = state["purl"]
+            if "/" in purl:
+                # Extract vendor from PURL (e.g., pkg:composer/brick/math → brick)
+                parts = purl.split("/")
+                if len(parts) >= 2:
+                    vendor = parts[1].split(":")[0]  # Get vendor part
+                    state["nvd_vendor"] = vendor
+                    state["nvd_product"] = state["name"].split("/")[-1] if "/" in state["name"] else state["name"]
+                    state["search_name"] = state["name"]
+                    state["fallback_stage"] = "fallback_1"
+                    logger.info(f"[fallback_1] Extracted vendor from PURL: {vendor}")
+                    return state
+        
+        # Try to extract vendor from component name (vendor/product format)
+        if "/" in state["name"]:
+            vendor, product = state["name"].split("/", 1)
+            state["nvd_vendor"] = vendor
+            state["nvd_product"] = product
+            state["search_name"] = state["name"]
+            state["fallback_stage"] = "fallback_1"
+            logger.info(f"[fallback_1] Extracted vendor from component name: {vendor}")
+            return state
+        
+        # If still no vendor, use existing CPE from component
         from app.models.component import Component
-        
         component = self.db.query(Component).filter(Component.id == state["component_id"]).first()
         if component and component.cpe:
             try:
                 parts = component.cpe.split(":")
                 if len(parts) >= 5:
+                    state["nvd_vendor"] = parts[3]
+                    state["nvd_product"] = parts[4]
+                    state["search_name"] = state["name"]
+                    state["fallback_stage"] = "fallback_1"
+                    logger.info(f"[fallback_1] Using existing CPE: {component.cpe}")
+                    return state
+            except:
+                pass
+        
+        state["error"] = "Could not extract vendor from PURL, component name, or existing CPE"
+        return state
                     state["nvd_vendor"] = parts[3]
                     state["nvd_product"] = parts[4]
                     state["constructed_cpe"] = component.cpe

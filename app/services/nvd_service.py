@@ -523,15 +523,28 @@ class NVDService:
             })
             if data and data.get("totalResults", 0) > 0:
                 vulnerabilities = data.get("vulnerabilities", [])
-                if len(vulnerabilities) > 100:
-                    print(f"[NVD] Too many results ({len(vulnerabilities)}), capping at 100")
-                    vulnerabilities = vulnerabilities[:100]
-                for vuln in vulnerabilities:
-                    cve = vuln.get("cve", {})
-                    cve_id = cve.get("id", "")
-                    if cve_id:
-                        cve_ids.add(cve_id)
-                print(f"[NVD] Keyword search found {len(cve_ids)} CVEs")
+                total = data.get("totalResults", 0)
+                
+                # If total > 500, skip and mark as needs CPE
+                if total > 500:
+                    print(f"[NVD] Too many results ({total}), skipping keyword search")
+                    print(f"[NVD] Component needs CPE instead of keyword search")
+                    # Don't add any CVEs from this search
+                else:
+                    # Sort by published date descending (most recent first)
+                    vulnerabilities.sort(
+                        key=lambda v: v.get("cve", {}).get("published", ""),
+                        reverse=True
+                    )
+                    if len(vulnerabilities) > 100:
+                        print(f"[NVD] Too many results ({len(vulnerabilities)}), capping at 100")
+                        vulnerabilities = vulnerabilities[:100]
+                    for vuln in vulnerabilities:
+                        cve = vuln.get("cve", {})
+                        cve_id = cve.get("id", "")
+                        if cve_id:
+                            cve_ids.add(cve_id)
+                    print(f"[NVD] Keyword search found {len(cve_ids)} CVEs")
         
         # Fallback: Original search strategies (only if agent data not available)
         if not constructed_cpe and not search_name:
@@ -824,13 +837,16 @@ class NVDService:
                 search_name=search_name
             )
             
-            # Store constructed CPE if component doesn't have one
-            if not component.cpe:
+            # NEVER overwrite constructed_cpe set by LangGraph agent
+            # Only set it if component doesn't have one AND agent didn't set one
+            if not component.cpe and not component.constructed_cpe:
                 constructed_cpe = self._build_cpe(search_name, clean_version, component.purl)
                 if constructed_cpe:
                     component.cpe = constructed_cpe
                     db.commit()
                     print(f"[NVD] Stored constructed CPE: {constructed_cpe}")
+            elif component.constructed_cpe:
+                print(f"[NVD] Using agent-constructed CPE: {component.constructed_cpe}")
 
             if not cve_ids:
                 print(f"[NVD Discovery] No CVE IDs found for {component.name} {component.version}")

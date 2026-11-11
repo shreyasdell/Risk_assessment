@@ -641,7 +641,8 @@ Examples:
 
                     # Check if product is different (hard REJECT)
                     if affected_product and affected_product.lower() not in component_name.lower():
-                        return (False, 95, f"LLM analysis: CVE affects {affected_product}, not {component_name}")
+                        # CAP CONFIDENCE AT 75 even for hard REJECT
+                        return (False, 75, f"LLM analysis: CVE affects {affected_product}, not {component_name}")
 
                     # If no range, return NEEDS_REVIEW (50)
                     if not affected_range or affected_range == "N/A":
