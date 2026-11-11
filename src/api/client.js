@@ -155,6 +155,15 @@ export const getRecentTasks = (taskType = null, limit = 10) =>
     params: { task_type: taskType, limit }
   });
 
+export const pauseSyncTask = (taskId) =>
+  apiClient.post(`/cves/tasks/${taskId}/pause`);
+
+export const resumeSyncTask = (taskId) =>
+  apiClient.post(`/cves/tasks/${taskId}/resume`);
+
+export const cancelSyncTask = (taskId) =>
+  apiClient.post(`/cves/tasks/${taskId}/cancel`);
+
 export const linkCVEToComponent = (cveId, componentId) =>
   apiClient.post('/cves/link', null, {
     params: { cve_id: cveId, component_id: componentId }
