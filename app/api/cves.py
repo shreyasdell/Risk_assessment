@@ -54,10 +54,11 @@ def read_cves(
     severity: Optional[str] = Query(None),
     min_cvss: Optional[float] = Query(None),
     application_id: Optional[int] = Query(None),
+    distinct: bool = Query(True),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    cves, total = get_cves(db, skip=skip, limit=limit, severity=severity, min_cvss=min_cvss, application_id=application_id)
+    cves, total = get_cves(db, skip=skip, limit=limit, severity=severity, min_cvss=min_cvss, application_id=application_id, distinct=distinct)
     return {
         "data": cves,
         "total": total,

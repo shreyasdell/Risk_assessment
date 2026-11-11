@@ -19,7 +19,8 @@ def get_cves(
     limit: int = 100,
     severity: Optional[str] = None,
     min_cvss: Optional[float] = None,
-    application_id: Optional[int] = None
+    application_id: Optional[int] = None,
+    distinct: bool = True
 ) -> Tuple[List[CVE], int]:
     """Get CVEs with total count for pagination."""
     query = db.query(CVE).join(CVE.components).join(Component.application)
@@ -32,10 +33,16 @@ def get_cves(
         query = query.filter(Component.application_id == application_id)
     
     # Get total count
-    total = query.count()
+    if distinct:
+        total = query.distinct().count()
+    else:
+        total = query.count()
     
     # Get paginated results
-    cves = query.order_by(CVE.cvss_score.desc()).offset(skip).limit(limit).all()
+    if distinct:
+        cves = query.distinct().order_by(CVE.cvss_score.desc()).offset(skip).limit(limit).all()
+    else:
+        cves = query.order_by(CVE.cvss_score.desc()).offset(skip).limit(limit).all()
     
     return cves, total
 
