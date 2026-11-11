@@ -43,6 +43,10 @@ class ComponentEnrichmentState(TypedDict):
     confidence: int
     error: Optional[str]
     fallback_stage: Optional[str]
+    cache_miss: Optional[bool]
+    validated: Optional[bool]
+    validation_status: Optional[str]
+    validation_error: Optional[str]
 
 
 class ComponentEnrichmentAgent:
@@ -93,7 +97,11 @@ class ComponentEnrichmentAgent:
             "enrichment_method": None,
             "confidence": 0,
             "error": None,
-            "fallback_stage": None
+            "fallback_stage": None,
+            "cache_miss": None,
+            "validated": None,
+            "validation_status": None,
+            "validation_error": None
         }
         
         # Step 1: Parse PURL
@@ -106,6 +114,14 @@ class ComponentEnrichmentAgent:
         # Step 3: LLM resolve if cache miss
         if not state.get("error") and state.get("cache_miss"):
             state = await self.llm_resolve(state)
+            if not state.get("error"):
+                # Validate LLM result
+                state = await self.validate_vendor_product(state)
+                # Only cache if validated
+                if state.get("validated"):
+                    self._cache_result(state)
+                else:
+                    logger.warning(f"[enrich_pipeline] LLM result not validated, skipping cache")
         
         # Step 4: Construct CPE
         if not state.get("error") and state.get("nvd_vendor"):
@@ -283,8 +299,8 @@ Important:
                 state["confidence"] = parsed.get("confidence", 70)
                 state["enrichment_method"] = "llm"
                 
-                # Cache the result
-                self._cache_result(state)
+                # Cache the result (will be re-cached after validation)
+                # self._cache_result(state)  # Moved to after validation
                 
                 logger.info(f"[llm_resolve] LLM resolved: {state['nvd_vendor']}/{state['nvd_product']}")
                 return state
@@ -292,6 +308,53 @@ Important:
         except Exception as e:
             logger.error(f"[llm_resolve] Error: {e}")
             state["error"] = str(e)
+            return state
+    
+    async def validate_vendor_product(self, state: dict) -> dict:
+        """Node 3.5: Validate LLM vendor/product against NVD CPE dictionary."""
+        logger.info(f"[validate] Checking NVD CPE dictionary for {state.get('nvd_vendor')}/{state.get('nvd_product')}")
+        
+        import httpx
+        
+        nvd_vendor = state.get("nvd_vendor")
+        nvd_product = state.get("nvd_product")
+        
+        if not nvd_vendor or not nvd_product:
+            state["validation_status"] = "missing_data"
+            state["validated"] = False
+            return state
+        
+        try:
+            # Query NVD CPE dictionary API
+            cpe_string = f"cpe:2.3:a:{nvd_vendor}:{nvd_product}:*:*:*:*:*:*:*:*"
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.get(
+                    "https://services.nvd.nist.gov/rest/json/cpes/2.0",
+                    params={"cpeMatchString": cpe_string, "resultsPerPage": 1}
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                # Check if any CPEs match
+                total_results = data.get("totalResults", 0)
+                if total_results > 0:
+                    state["validation_status"] = "validated"
+                    state["validated"] = True
+                    state["confidence"] = 90  # Raise confidence for validated pairs
+                    logger.info(f"[validate] VALIDATED: {nvd_vendor}/{nvd_product} exists in NVD CPE dictionary")
+                else:
+                    state["validation_status"] = "not_found"
+                    state["validated"] = False
+                    state["enrichment_status"] = "unvalidated"
+                    logger.warning(f"[validate] NOT VALIDATED: {nvd_vendor}/{nvd_product} not found in NVD CPE dictionary")
+                
+                return state
+                
+        except Exception as e:
+            logger.error(f"[validate] Error checking NVD CPE dictionary: {e}")
+            state["validation_status"] = "error"
+            state["validated"] = False
+            state["validation_error"] = str(e)
             return state
     
     async def construct_cpe(self, state: dict) -> dict:
