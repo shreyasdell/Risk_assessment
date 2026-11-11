@@ -2,10 +2,9 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, 
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
-from app.agent.models import CVEAgentMixin
 
 
-class CVE(Base, CVEAgentMixin):
+class CVE(Base):
     __tablename__ = "cves"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -13,21 +12,31 @@ class CVE(Base, CVEAgentMixin):
     description = Column(Text, nullable=True)
     cvss_score = Column(Float, nullable=True)
     cvss_vector = Column(String, nullable=True)
-    severity = Column(String, default="medium")  # Changed from Enum to String for SQLite
-    cwe_id = Column(String, nullable=True)  # Common Weakness Enumeration
+    severity = Column(String, default="medium")
+    cwe_id = Column(String, nullable=True)
     published_date = Column(DateTime, nullable=True)
     modified_date = Column(DateTime, nullable=True)
     exploit_available = Column(Boolean, default=False)
     patch_available = Column(Boolean, default=False)
-    references = Column(Text, nullable=True)  # JSON string of reference URLs
+    references = Column(Text, nullable=True)
     nvd_url = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 
     # CVE.org cache fields
-    cveorg_affected_products = Column(JSON, nullable=True)  # Stores the full affected[] array from CVE.org
-    cveorg_fetched_at = Column(DateTime, nullable=True)  # When we last fetched from CVE.org
-    cveorg_raw = Column(JSON, nullable=True)  # Optional: store complete CVE.org response for debugging
+    cveorg_affected_products = Column(JSON, nullable=True)
+    cveorg_fetched_at = Column(DateTime, nullable=True)
+    cveorg_raw = Column(JSON, nullable=True)
+
+    # Legacy agent fields (from old CVEFilterAgent - kept for backward compatibility)
+    agent_confidence = Column(Integer, default=0)
+    agent_verdict = Column(String, default="UNPROCESSED")
+    agent_reasoning = Column(Text, nullable=True)
+    match_method = Column(String, nullable=True)
+    stage_details = Column(JSON, nullable=True)
+    is_false_positive = Column(Boolean, default=False)
+    agent_processing_time = Column(Float, nullable=True)
+    agent_processed_at = Column(DateTime, nullable=True)
 
     components = relationship("Component", secondary="component_cve", back_populates="cves")
     remediations = relationship(
@@ -43,5 +52,6 @@ component_cve = Table(
     Base.metadata,
     Column('component_id', Integer, ForeignKey('components.id'), primary_key=True),
     Column('cve_id', Integer, ForeignKey('cves.id'), primary_key=True),
+    Column('confidence', Integer, nullable=True),  # Confidence score for this link
     Column('created_at', DateTime, server_default=func.now())
 )

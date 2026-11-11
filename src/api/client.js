@@ -111,8 +111,13 @@ export const deleteComponent = (id) =>
   apiClient.delete(`/components/${id}`);
 
 // CVEs
-export const fetchCVEs = (params = {}) =>
-  apiClient.get('/cves', { params });
+export const fetchCVEs = (params = {}) => {
+  // Default to distinct CVEs unless explicitly set to false
+  if (params.distinct === undefined) {
+    params.distinct = true;
+  }
+  return apiClient.get('/cves', { params });
+};
 
 export const fetchCVE = (id) =>
   apiClient.get(`/cves/${id}`);

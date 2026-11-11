@@ -50,16 +50,8 @@ class Remediation(Base):
     )
 
     # Tracking fields
-    status = Column(
-        SQLEnum(RemediationStatus),
-        default=RemediationStatus.OPEN,
-        nullable=False,
-        index=True
-    )
-    priority = Column(
-        SQLEnum(RemediationPriority),
-        nullable=False
-    )
+    status = Column(String, nullable=False, index=True)  # Changed from Enum to String
+    priority = Column(String, nullable=False)  # Changed from Enum to String
     assigned_to = Column(String(200), nullable=True)
     due_date = Column(DateTime(timezone=True), nullable=True)
 

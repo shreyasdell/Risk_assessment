@@ -13,18 +13,18 @@ class BackgroundTask(Base):
     __tablename__ = "background_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
-    task_type = Column(String, nullable=False, index=True)  # e.g., "bulk_cve_sync"
-    status = Column(String, default="pending")  # pending, running, completed, failed
-    total_items = Column(Integer, default=0)
-    processed_items = Column(Integer, default=0)
-    failed_items = Column(Integer, default=0)
-    current_item = Column(String, nullable=True)  # Name of current item being processed
+    task_type = Column(String, nullable=False, index=True)
+    status = Column(String, default="pending")
+    total_items = Column(Integer, nullable=True)
+    processed_items = Column(Integer, nullable=True)
+    failed_items = Column(Integer, nullable=True)
+    current_item = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
-    result = Column(JSON, nullable=True)  # Store final results
+    result = Column(JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_by = Column(String, nullable=True)  # Username who started the task
+    created_by = Column(String, nullable=True)
 
     def to_dict(self):
         return {
