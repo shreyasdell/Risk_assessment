@@ -10,17 +10,24 @@ Idempotent job to re-run enrichment for components with:
 
 import asyncio
 import sys
+import os
+
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app.core.database import SessionLocal
+from app.core.config import settings
 from app.models.component import Component
 from app.agent.langgraph_agent.graph import ComponentEnrichmentAgent
 
 
-async def backfill_enrichment(dry_run=False):
+async def backfill_enrichment(dry_run=False, application_id=None):
     """
     Backfill enrichment for components that need it.
     
     Args:
         dry_run: If True, only report what would be done without making changes
+        application_id: If provided, only process components for this application
     """
     db = SessionLocal()
     agent = ComponentEnrichmentAgent(db)
@@ -33,8 +40,13 @@ async def backfill_enrichment(dry_run=False):
         (Component.constructed_cpe.is_(None))
     )
     
+    if application_id:
+        query = query.filter(Component.application_id == application_id)
+    
     total = query.count()
     print(f"Found {total} components needing enrichment")
+    if application_id:
+        print(f"  (filtered by application_id={application_id})")
     
     if dry_run:
         print("DRY RUN - No changes will be made")
@@ -63,4 +75,9 @@ async def backfill_enrichment(dry_run=False):
 
 if __name__ == "__main__":
     dry_run = "--dry-run" in sys.argv
-    asyncio.run(backfill_enrichment(dry_run=dry_run))
+    app_id = None
+    for arg in sys.argv:
+        if arg.startswith("--app-id="):
+            app_id = int(arg.split("=")[1])
+    
+    asyncio.run(backfill_enrichment(dry_run=dry_run, application_id=app_id))

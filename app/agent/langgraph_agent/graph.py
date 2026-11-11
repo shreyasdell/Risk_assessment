@@ -20,6 +20,8 @@ Cascading Fallback (1,2,3):
 from typing import TypedDict, Optional
 import logging
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 

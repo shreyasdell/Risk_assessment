@@ -43,6 +43,22 @@ def delete_application(db: Session, application_id: int) -> bool:
     db_application = get_application(db, application_id)
     if not db_application:
         return False
+    
+    # Delete component_cve links for this application's components
+    from app.models.component import Component
+    from app.models.cve import CVE
+    
+    # Get all components for this application
+    components = db.query(Component).filter(Component.application_id == application_id).all()
+    
+    for component in components:
+        # Clear CVE links (this deletes from component_cve table)
+        component.cves.clear()
+    
+    # Delete all components for this application
+    db.query(Component).filter(Component.application_id == application_id).delete()
+    
+    # Delete the application
     db.delete(db_application)
     db.commit()
     return True
