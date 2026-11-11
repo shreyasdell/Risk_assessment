@@ -312,24 +312,31 @@ class SBOMParser:
     @staticmethod
     def detect_format(content: str, filename: str) -> str:
         """Detect SBOM format from content or filename"""
+        # First try to detect from content (more reliable)
+        try:
+            data = json.loads(content)
+            if "bomFormat" in data and data["bomFormat"] == "CycloneDX":
+                return "cyclonedx_json"
+            elif "spdxVersion" in data:
+                return "spdx_json"
+        except json.JSONDecodeError:
+            pass
+        
+        # Try XML parsing
+        try:
+            root = ET.fromstring(content)
+            if "CycloneDX" in root.tag or "bom" in root.tag.lower():
+                return "cyclonedx_xml"
+            elif "SPDX" in root.tag or "Document" in root.tag:
+                return "spdx_rdf"
+        except ET.ParseError:
+            pass
+        
+        # Fallback to filename-based detection
         if filename.endswith(".json"):
-            try:
-                data = json.loads(content)
-                if "bomFormat" in data and data["bomFormat"] == "CycloneDX":
-                    return "cyclonedx_json"
-                elif "spdxVersion" in data:
-                    return "spdx_json"
-            except json.JSONDecodeError:
-                pass
+            return "cyclonedx_json"  # Assume CycloneDX JSON
         elif filename.endswith(".xml"):
-            try:
-                root = ET.fromstring(content)
-                if "CycloneDX" in root.tag or "bom" in root.tag.lower():
-                    return "cyclonedx_xml"
-                elif "SPDX" in root.tag or "Document" in root.tag:
-                    return "spdx_rdf"
-            except ET.ParseError:
-                pass
+            return "cyclonedx_xml"  # Assume CycloneDX XML
         
         raise ValueError("Unable to detect SBOM format")
     

@@ -25,28 +25,43 @@ def get_cves(
     """Get CVEs with total count for pagination."""
     if application_id:
         # Filter by application - join with components and application
-        query = db.query(CVE).join(CVE.components).join(Component.application)
+        # Use subquery to avoid DISTINCT on JSON columns
+        from sqlalchemy import func
+        
+        # Get distinct CVE IDs
+        cve_ids_subquery = db.query(CVE.id).join(CVE.components).join(Component.application)
+        if severity:
+            cve_ids_subquery = cve_ids_subquery.filter(CVE.severity == severity)
+        if min_cvss is not None:
+            cve_ids_subquery = cve_ids_subquery.filter(CVE.cvss_score >= min_cvss)
+        if application_id:
+            cve_ids_subquery = cve_ids_subquery.filter(Component.application_id == application_id)
+        
+        if distinct:
+            cve_ids_subquery = cve_ids_subquery.distinct()
+        
+        # Get total count
+        total = cve_ids_subquery.count()
+        
+        # Get CVE IDs for pagination
+        cve_ids = cve_ids_subquery.order_by(CVE.cvss_score.desc()).offset(skip).limit(limit).all()
+        cve_ids = [id for (id,) in cve_ids]
+        
+        # Get full CVE objects
+        cves = db.query(CVE).filter(CVE.id.in_(cve_ids)).order_by(CVE.cvss_score.desc()).all()
     else:
         # Get all CVEs - no join needed
         query = db.query(CVE)
-    
-    if severity:
-        query = query.filter(CVE.severity == severity)
-    if min_cvss is not None:
-        query = query.filter(CVE.cvss_score >= min_cvss)
-    if application_id:
-        query = query.filter(Component.application_id == application_id)
-    
-    # Get total count
-    if distinct:
-        total = query.distinct().count()
-    else:
+        
+        if severity:
+            query = query.filter(CVE.severity == severity)
+        if min_cvss is not None:
+            query = query.filter(CVE.cvss_score >= min_cvss)
+        
+        # Get total count
         total = query.count()
-    
-    # Get paginated results
-    if distinct:
-        cves = query.distinct().order_by(CVE.cvss_score.desc()).offset(skip).limit(limit).all()
-    else:
+        
+        # Get paginated results
         cves = query.order_by(CVE.cvss_score.desc()).offset(skip).limit(limit).all()
     
     return cves, total
