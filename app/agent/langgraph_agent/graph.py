@@ -436,7 +436,7 @@ Important:
         logger.info(f"[validate] Checking NVD CPE dictionary for {state.get('nvd_vendor')}/{state.get('nvd_product')}")
         
         import httpx
-        from datetime import datetime, timedelta
+        from datetime import datetime, timezone, timedelta
         from app.models.vendor_cache import CPEValidationCache
         
         nvd_vendor = state.get("nvd_vendor")
@@ -456,7 +456,8 @@ Important:
         
         if cache_entry:
             # Check if cache entry is still valid (24 hour TTL)
-            if cache_entry.expires_at and cache_entry.expires_at > datetime.utcnow():
+            now = datetime.now(timezone.utc)
+            if cache_entry.expires_at and cache_entry.expires_at > now:
                 # Cache hit
                 cache_entry.hit_count += 1
                 self.db.commit()
@@ -488,11 +489,12 @@ Important:
                     logger.warning(f"[validate] Rate limited for {nvd_vendor}/{nvd_product}")
                     
                     # Cache the rate limit result for 1 hour
+                    now = datetime.now(timezone.utc)
                     cache_entry = CPEValidationCache(
                         vendor=nvd_vendor,
                         product=nvd_product,
                         validation_status="RATE_LIMITED",
-                        expires_at=datetime.utcnow() + timedelta(hours=1)
+                        expires_at=now + timedelta(hours=1)
                     )
                     self.db.add(cache_entry)
                     self.db.commit()
@@ -517,11 +519,12 @@ Important:
                     logger.warning(f"[validate] NOT VALIDATED: {nvd_vendor}/{nvd_product} not found in NVD CPE dictionary")
                 
                 # Cache the validation result for 24 hours
+                now = datetime.now(timezone.utc)
                 cache_entry = CPEValidationCache(
                     vendor=nvd_vendor,
                     product=nvd_product,
                     validation_status=state["validation_status"],
-                    expires_at=datetime.utcnow() + timedelta(hours=24)
+                    expires_at=now + timedelta(hours=24)
                 )
                 self.db.add(cache_entry)
                 self.db.commit()

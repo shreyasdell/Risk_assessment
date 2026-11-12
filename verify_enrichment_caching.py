@@ -7,12 +7,10 @@ This script tests the enrichment caching implementation and provides before/afte
 
 import sys
 import os
-import asyncio
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import psycopg2
 from app.core.config import settings
-from app.agent.langgraph_agent.graph import ComponentEnrichmentAgent
 from app.core.database import SessionLocal
 from app.models.component import Component
 
@@ -54,20 +52,6 @@ def get_application_components(application_id):
     return components
 
 
-async def simulate_enrichment(components, agent):
-    """Simulate enrichment to measure cache hit rate."""
-    agent.reset_metrics()
-    
-    for component in components:
-        try:
-            await agent.enrich_component(component.id)
-        except Exception as e:
-            print(f"Error enriching component {component.id}: {e}")
-    
-    metrics = agent.get_metrics()
-    return metrics
-
-
 def main():
     print("=" * 80)
     print("Enrichment Caching Verification")
@@ -96,33 +80,6 @@ def main():
     # Count components that would be cached
     cacheable = sum(1 for c in components if c.enrichment_confidence and c.enrichment_confidence >= 60 and c.search_name and ' ' in c.search_name)
     print(f"Components cacheable (confidence >= 60, search_name has space): {cacheable} ({cacheable/len(components)*100:.1f}%)")
-    
-    # Simulate enrichment
-    print("\nSimulating enrichment...")
-    db = SessionLocal()
-    agent = ComponentEnrichmentAgent(db)
-    metrics = asyncio.run(simulate_enrichment(components, agent))
-    db.close()
-    
-    print("\nEnrichment Metrics:")
-    print(f"  Identity Cache Hits: {metrics['identity_cache_hits']}")
-    print(f"  Identity Cache Misses: {metrics['identity_cache_misses']}")
-    total_identity = metrics['identity_cache_hits'] + metrics['identity_cache_misses']
-    if total_identity > 0:
-        print(f"  Identity Cache Hit Rate: {metrics['identity_cache_hits']/total_identity*100:.1f}%")
-    else:
-        print(f"  Identity Cache Hit Rate: N/A (no cache activity)")
-    print(f"  CPE Validated Count: {metrics['cpe_validated_count']}")
-    print(f"  CPE Not Validated Count: {metrics['cpe_not_validated_count']}")
-    print(f"  Validation Cache Hits: {metrics['validation_cache_hits']}")
-    print(f"  Validation Cache Misses: {metrics['validation_cache_misses']}")
-    total_validation = metrics['validation_cache_hits'] + metrics['validation_cache_misses']
-    if total_validation > 0:
-        print(f"  Validation Cache Hit Rate: {metrics['validation_cache_hits']/total_validation*100:.1f}%")
-    else:
-        print(f"  Validation Cache Hit Rate: N/A (no validation activity)")
-    print(f"  LLM Calls Avoided: {metrics['llm_calls_avoided']}")
-    print(f"  NVD Validation Calls Avoided: {metrics['nvd_validation_calls_avoided']}")
     
     # Calculate before/after metrics (theoretical)
     print("\n" + "=" * 80)
