@@ -216,6 +216,13 @@ class ComponentEnrichmentAgent:
             "validation_cache_misses": 0,
             "llm_calls_avoided": 0,
             "nvd_validation_calls_avoided": 0,
+            # OS package normalization metrics
+            "os_package_resolved": 0,
+            "os_package_fallback": 0,
+            "candidate_cve_count_before": 0,
+            "candidate_cve_count_after": 0,
+            "cve_org_calls_before": 0,
+            "cve_org_calls_after": 0,
         }
     
     async def plain_text_resolve(self, state: dict) -> dict:
@@ -319,6 +326,9 @@ class ComponentEnrichmentAgent:
             
             logger.info(f"[os_package_resolve] Resolved: {component_name} -> {result['canonical_vendor']}/{result['canonical_product']} (search: {search_name})")
             self._metrics["llm_calls_avoided"] += 1
+            self._metrics["os_package_resolved"] += 1
+        else:
+            self._metrics["os_package_fallback"] += 1
         
         return state
     
@@ -715,8 +725,17 @@ Important:
         """Node 4: Construct CPE string from resolved vendor/product."""
         logger.info(f"[construct_cpe] Building CPE for {state['name']}")
         
+        # Use canonical identities for OS packages
+        if state.get("canonical_vendor") and state.get("canonical_product"):
+            nvd_vendor = state["canonical_vendor"]
+            nvd_product = state["canonical_product"]
+            logger.info(f"[construct_cpe] Using canonical identities: {nvd_vendor}/{nvd_product}")
+        else:
+            nvd_vendor = state.get("nvd_vendor")
+            nvd_product = state.get("nvd_product")
+        
         # Don't construct CPE if vendor is None or missing
-        if not state.get("nvd_vendor") or not state.get("nvd_product"):
+        if not nvd_vendor or not nvd_product:
             logger.warning(f"[construct_cpe] Missing vendor or product, skipping CPE construction")
             # DON'T set error - component should still be enriched with search_name
             state["enrichment_status"] = "no_cpe"
@@ -727,7 +746,7 @@ Important:
             return state
         
         # Don't construct CPE if vendor is literally "None" string
-        if state["nvd_vendor"] == "None" or state["nvd_product"] == "None":
+        if nvd_vendor == "None" or nvd_product == "None":
             logger.warning(f"[construct_cpe] Vendor or product is 'None' string, skipping CPE construction")
             state["enrichment_status"] = "no_cpe"
             state["constructed_cpe"] = None
@@ -739,7 +758,7 @@ Important:
         # Don't construct CPE if contains invalid characters (/, spaces, etc.)
         invalid_chars = [" ", "/", "\\", "(", ")", "{", "}", "<", ">"]
         for char in invalid_chars:
-            if char in state["nvd_vendor"] or char in state["nvd_product"]:
+            if char in nvd_vendor or char in nvd_product:
                 logger.warning(f"[construct_cpe] Invalid character '{char}' in vendor/product, skipping CPE construction")
                 state["enrichment_status"] = "no_cpe"
                 state["constructed_cpe"] = None
@@ -753,8 +772,8 @@ Important:
             clean_ver = self._clean_version_string(state["version"])
             state["clean_version"] = clean_ver
             
-            # Construct CPE
-            cpe = f"cpe:2.3:a:{state['nvd_vendor']}:{state['nvd_product']}:{clean_ver}:*:*:*:*:*:*:*"
+            # Construct CPE using canonical identities if available
+            cpe = f"cpe:2.3:a:{nvd_vendor}:{nvd_product}:{clean_ver}:*:*:*:*:*:*:*"
             state["constructed_cpe"] = cpe
             
             # Generate search name (use component name as default, not just product)
