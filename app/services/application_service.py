@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List, Optional
 from app.models.application import Application
 from app.schemas.application import ApplicationCreate, ApplicationUpdate
@@ -73,10 +74,15 @@ def delete_application(db: Session, application_id: int) -> bool:
     
     # Get all components for this application
     components = db.query(Component).filter(Component.application_id == application_id).all()
+    component_ids = [c.id for c in components]
     
-    for component in components:
-        # Clear CVE links (this deletes from component_cve table)
-        component.cves.clear()
+    # Explicitly delete component_cve links for these components
+    if component_ids:
+        db.execute(
+            text("DELETE FROM component_cve WHERE component_id = ANY(:component_ids)"),
+            {"component_ids": component_ids}
+        )
+        db.commit()
     
     # Delete all components for this application
     db.query(Component).filter(Component.application_id == application_id).delete()
