@@ -156,6 +156,14 @@ function ComponentsPage() {
   const handleEdit = (component) => { setEditingComponent(component); setFormData({ name: component.name, version: component.version || '', component_type: component.component_type || 'library', purl: component.purl || '', supplier: component.supplier || '', description: component.description || '', license: component.license || '', application_id: component.application_id || '' }); setShowModal(true); };
   const handleSubmit = async (e) => { e.preventDefault(); try { if (editingComponent) await updateComponent(editingComponent.id, formData); else await createComponent(formData); setShowModal(false); loadComponents(); } catch (err) { console.error(err); alert('Failed'); } };
   const handleSyncCVEs = async (componentId) => {
+    const component = components.find(c => c.id === componentId);
+    
+    // Check if component is enriched
+    if (!component.nvd_vendor || !component.nvd_product || !component.search_name || component.enrichment_confidence < 60) {
+      alert('Component enrichment is not complete. Please wait for enrichment to finish before syncing CVEs.');
+      return;
+    }
+    
     setSyncingCVEs(prev => ({ ...prev, [componentId]: true }));
     try {
       await syncCVEs(componentId);
@@ -171,6 +179,18 @@ function ComponentsPage() {
   };
 
   const handleBulkSyncCVEs = async () => {
+    // Check if any components in the selected application are not enriched
+    const componentsToCheck = selectedApplication 
+      ? components.filter(c => c.application_id === parseInt(selectedApplication))
+      : components;
+    
+    const notEnriched = componentsToCheck.filter(c => !c.nvd_vendor || !c.nvd_product || !c.search_name || c.enrichment_confidence < 60);
+    
+    if (notEnriched.length > 0) {
+      alert(`${notEnriched.length} component(s) are not enriched yet. Please wait for enrichment to finish before syncing CVEs.`);
+      return;
+    }
+    
     if (!window.confirm(`Sync CVEs for all components${selectedApplication ? ' in this application' : ''}? This will run in the background.`)) {
       return;
     }
@@ -220,6 +240,14 @@ function ComponentsPage() {
       setBulkSyncing(false);
     }
   };
+
+  // Check if any components are not enriched
+  const hasUnenrichedComponents = () => {
+    const componentsToCheck = selectedApplication 
+      ? components.filter(c => c.application_id === parseInt(selectedApplication))
+      : components;
+    return componentsToCheck.some(c => !c.nvd_vendor || !c.nvd_product || !c.search_name || c.enrichment_confidence < 60);
+  };
   const handleViewCVEs = async (componentId) => { 
     setCveCurrentPage(1); // Reset to first page
     try { 
@@ -255,22 +283,24 @@ function ComponentsPage() {
           {canWrite && (
             <button
               onClick={handleBulkSyncCVEs}
-              disabled={bulkSyncing}
+              disabled={bulkSyncing || hasUnenrichedComponents()}
               style={{
-                backgroundColor: bulkSyncing ? '#64748B' : '#107C10',
+                backgroundColor: (bulkSyncing || hasUnenrichedComponents()) ? '#64748B' : '#107C10',
                 color: '#FFFFFF',
                 border: 'none',
                 padding: '8px 16px',
                 borderRadius: '4px',
                 fontSize: '14px',
                 fontWeight: 500,
-                cursor: bulkSyncing ? 'not-allowed' : 'pointer'
+                cursor: (bulkSyncing || hasUnenrichedComponents()) ? 'not-allowed' : 'pointer'
               }}
             >
               {bulkSyncing && backgroundTask
                 ? `Syncing... ${backgroundTask.progress_percentage || 0}%`
                 : bulkSyncing
                 ? 'Starting...'
+                : hasUnenrichedComponents()
+                ? 'Enriching...'
                 : 'Sync All CVEs'}
             </button>
           )}
@@ -306,7 +336,22 @@ function ComponentsPage() {
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                   {canWrite && (
-                    <button onClick={() => handleSyncCVEs(component.id)} disabled={syncingCVEs[component.id]} style={{ background: syncingCVEs[component.id] ? '#64748B' : '#107C10', color: '#FFFFFF', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: syncingCVEs[component.id] ? 'not-allowed' : 'pointer', fontSize: '12px', marginRight: '8px' }}>{syncingCVEs[component.id] ? 'Syncing...' : 'Sync CVEs'}</button>
+                    <button 
+                      onClick={() => handleSyncCVEs(component.id)} 
+                      disabled={syncingCVEs[component.id] || !component.nvd_vendor || !component.nvd_product || !component.search_name || component.enrichment_confidence < 60}
+                      style={{ 
+                        background: (syncingCVEs[component.id] || !component.nvd_vendor || !component.nvd_product || !component.search_name || component.enrichment_confidence < 60) ? '#64748B' : '#107C10', 
+                        color: '#FFFFFF', 
+                        border: 'none', 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        cursor: (syncingCVEs[component.id] || !component.nvd_vendor || !component.nvd_product || !component.search_name || component.enrichment_confidence < 60) ? 'not-allowed' : 'pointer', 
+                        fontSize: '12px', 
+                        marginRight: '8px' 
+                      }}
+                    >
+                      {syncingCVEs[component.id] ? 'Syncing...' : (!component.nvd_vendor || !component.nvd_product || !component.search_name || component.enrichment_confidence < 60) ? 'Enriching...' : 'Sync CVEs'}
+                    </button>
                   )}
                   <button onClick={() => handleViewCVEs(component.id)} style={{ background: 'none', border: 'none', color: '#F4B400', cursor: 'pointer', fontSize: '13px', marginRight: '8px' }}>View CVEs</button>
                   {canWrite && (
