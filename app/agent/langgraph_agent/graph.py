@@ -134,8 +134,12 @@ class ComponentEnrichmentAgent:
         if not state.get("error"):
             state = await self.check_cache(state)
         
-        # Step 3: LLM resolve if cache miss
+        # Step 3: Deterministic resolution if cache miss
         if not state.get("error") and state.get("cache_miss"):
+            state = await self.deterministic_resolve(state)
+        
+        # Step 4: LLM resolve only if deterministic failed
+        if not state.get("error") and state.get("cache_miss") and not state.get("nvd_vendor"):
             state = await self.llm_resolve(state)
             if not state.get("error"):
                 # Validate LLM result (informational only, no longer controls caching)
@@ -146,21 +150,29 @@ class ComponentEnrichmentAgent:
                     logger.info(f"[enrich_pipeline] Cached enrichment based on identity quality")
                 else:
                     logger.warning(f"[enrich_pipeline] Enrichment quality too low, skipping cache")
-            
-            # Run fallbacks if confidence is too low (configurable, default 60)
-            if not state.get("error") and state.get("confidence", 0) < 60:
-                logger.warning(f"[enrich_pipeline] Confidence {state.get('confidence')} below threshold 60, running fallbacks")
-                state = await self.fallback_1(state)
+        
+        # Step 5: Validate deterministic result (if successful)
+        if not state.get("error") and state.get("nvd_vendor") and state.get("resolution_method") == "deterministic":
+            state = await self.validate_vendor_product(state)
+            # Cache based on identity quality
+            if self._should_cache(state):
+                self._cache_result(state)
+                logger.info(f"[enrich_pipeline] Cached deterministic enrichment")
+        
+        # Step 6: Run fallbacks if confidence is too low (configurable, default 60)
+        if not state.get("error") and state.get("confidence", 0) < 60:
+            logger.warning(f"[enrich_pipeline] Confidence {state.get('confidence')} below threshold 60, running fallbacks")
+            state = await self.fallback_1(state)
+            if state.get("error"):
+                state = await self.fallback_2(state)
                 if state.get("error"):
-                    state = await self.fallback_2(state)
-                    if state.get("error"):
-                        state = await self.fallback_3(state)
+                    state = await self.fallback_3(state)
         else:
             # Cache hit - LLM call avoided
             if not state.get("error") and not state.get("cache_miss"):
                 self._metrics["llm_calls_avoided"] += 1
         
-        # Step 4: Construct CPE (only if we have vendor/product and no error)
+        # Step 7: Construct CPE (only if we have vendor/product and no error)
         if not state.get("error") and state.get("nvd_vendor") and state.get("nvd_product"):
             state = await self.construct_cpe(state)
         
@@ -355,6 +367,55 @@ class ComponentEnrichmentAgent:
             return False
         
         return True
+    
+    async def deterministic_resolve(self, state: dict) -> dict:
+        """Node 3: Use deterministic resolvers based on ecosystem."""
+        logger.info(f"[deterministic_resolve] Using deterministic resolver for {state['name']}")
+        
+        purl = state.get("purl")
+        purl_type = state.get("purl_type")
+        
+        if not purl:
+            return state
+        
+        # Import resolvers
+        from app.agent.langgraph_agent.resolvers import (
+            MavenResolver, NPMResolver, ComposerResolver,
+            GolangResolver, PyPIResolver, NuGetResolver, CargoResolver
+        )
+        
+        # Select resolver based on ecosystem
+        resolver = None
+        if purl_type == "maven":
+            resolver = MavenResolver()
+        elif purl_type == "npm":
+            resolver = NPMResolver()
+        elif purl_type == "composer":
+            resolver = ComposerResolver()
+        elif purl_type == "golang":
+            resolver = GolangResolver()
+        elif purl_type == "pypi":
+            resolver = PyPIResolver()
+        elif purl_type == "nuget":
+            resolver = NuGetResolver()
+        elif purl_type == "cargo":
+            resolver = CargoResolver()
+        
+        if resolver:
+            result = resolver.resolve(purl, state["name"])
+            if result:
+                state["nvd_vendor"] = result["vendor"]
+                state["nvd_product"] = result["product"]
+                state["search_name"] = result["search_name"]
+                state["ecosystem"] = result["ecosystem"]
+                state["confidence"] = result["confidence"]
+                state["enrichment_method"] = result["resolution_method"]
+                logger.info(f"[deterministic_resolve] Resolved: {result['vendor']}/{result['product']} (confidence: {result['confidence']})")
+                self._metrics["llm_calls_avoided"] += 1
+            else:
+                logger.info(f"[deterministic_resolve] Resolver failed, will fall back to LLM")
+        
+        return state
     
     async def llm_resolve(self, state: dict) -> dict:
         """Node 3: Use LLM to resolve vendor/product."""
