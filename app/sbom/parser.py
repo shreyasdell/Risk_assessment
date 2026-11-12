@@ -2,6 +2,7 @@ import json
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Optional
 from app.schemas.component import ComponentCreate
+from app.agent.canonical_identity.resolver import CanonicalIdentityResolver
 
 
 class SBOMParser:
