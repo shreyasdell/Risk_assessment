@@ -435,7 +435,7 @@ function ComponentsPage() {
                     >
                       {cve.cve_id}
                     </a>
-                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', backgroundColor: cve.severity === 'critical' ? '#FDE8E8' : cve.severity === 'high' ? '#FFF4E5' : '#E6F4EA', color: cve.severity === 'critical' ? '#D13438' : cve.severity === 'high' ? '#F4B400' : '#107C10' }}>{cve.severity}</span>
+                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', backgroundColor: cve.severity?.toLowerCase() === 'critical' ? '#F8D7DA' : cve.severity?.toLowerCase() === 'high' ? '#FDE8E8' : cve.severity?.toLowerCase() === 'medium' ? '#FFF4E5' : '#E6F4EA', color: cve.severity?.toLowerCase() === 'critical' ? '#721C24' : cve.severity?.toLowerCase() === 'high' ? '#D13438' : cve.severity?.toLowerCase() === 'medium' ? '#F4B400' : '#107C10' }}>{cve.severity}</span>
                   </div>
                   <p style={{ color: '#606060', fontSize: '13px', marginBottom: '8px' }}>{cve.description}</p>
                   <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#606060' }}><span>CVSS: {cve.cvss_score}</span><span>Exploit: {cve.exploit_available ? 'Yes' : 'No'}</span><span>Patch: {cve.patch_available ? 'Yes' : 'No'}</span></div>
