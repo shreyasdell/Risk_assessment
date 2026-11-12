@@ -156,21 +156,34 @@ def upload_codebase(
             created_components = create_components_bulk(db, component_creates)
             print(f"[codebase_upload] Created {len(created_components)} components in database")
         
-        # Trigger enrichment for the application
+        # Trigger enrichment for the application in background
         from app.agent.langgraph_agent import ComponentEnrichmentAgent
         from app.models.component import Component
+        import asyncio
         
         # Get all components for this application
         components = db.query(Component).filter(Component.application_id == application_id).all()
         
         if components:
             print(f"[codebase_upload] Triggering enrichment for {len(components)} components")
-            agent = ComponentEnrichmentAgent(db)
-            for component in components:
+            
+            # Run enrichment in background task to avoid blocking
+            def run_enrichment():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
                 try:
-                    agent.enrich_component(component.id)
-                except Exception as e:
-                    print(f"[codebase_upload] Error enriching component {component.id}: {e}")
+                    agent = ComponentEnrichmentAgent(db)
+                    for component in components:
+                        try:
+                            loop.run_until_complete(agent.enrich_component(component.id))
+                        except Exception as e:
+                            print(f"[codebase_upload] Error enriching component {component.id}: {e}")
+                finally:
+                    loop.close()
+            
+            import threading
+            enrichment_thread = threading.Thread(target=run_enrichment, daemon=True)
+            enrichment_thread.start()
         
     except Exception as e:
         print(f"[codebase_upload] Error analyzing codebase: {e}")
