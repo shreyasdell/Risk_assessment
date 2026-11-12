@@ -134,6 +134,10 @@ class ComponentEnrichmentAgent:
         if not state.get("nvd_vendor") and not state.get("error"):
             state = await self.parse_purl(state)
         
+        # Step 2.5: OS package normalization (Layer 1 - for deb/rpm/apk)
+        if not state.get("error") and state.get("purl_type") in ["deb", "rpm", "apk"]:
+            state = await self.os_package_resolve(state)
+        
         # Step 3: Check cache (Layer 2)
         if not state.get("error") and state.get("cache_miss", True):
             state = await self.check_cache(state)
@@ -274,6 +278,47 @@ class ComponentEnrichmentAgent:
         state["enrichment_method"] = "plain_text"
         self._metrics["llm_calls_avoided"] += 1
         logger.info(f"[plain_text_resolve] Resolved single name: {name}")
+        
+        return state
+    
+    async def os_package_resolve(self, state: dict) -> dict:
+        """Layer 1: Resolve OS packages to canonical upstream products."""
+        logger.info(f"[os_package_resolve] Resolving OS package: {state['name']}")
+        
+        from app.agent.os_package_resolver.resolver import OSPackageResolver
+        
+        resolver = OSPackageResolver()
+        purl = state.get("purl")
+        component_name = state["name"]
+        
+        # Detect ecosystem
+        ecosystem = resolver.detect_ecosystem(purl, component_name)
+        if not ecosystem:
+            logger.info(f"[os_package_resolve] Not an OS package, skipping")
+            return state
+        
+        # Resolve to canonical vendor/product
+        result = resolver.resolve(component_name, ecosystem)
+        
+        if result["canonical_vendor"] and result["canonical_product"]:
+            state["package_ecosystem"] = ecosystem
+            state["canonical_vendor"] = result["canonical_vendor"]
+            state["canonical_product"] = result["canonical_product"]
+            
+            # Use canonical product for NVD vendor/product
+            state["nvd_vendor"] = result["canonical_vendor"]
+            state["nvd_product"] = result["canonical_product"]
+            
+            # Generate search name from canonical identities
+            search_name = resolver.generate_search_name(result["canonical_vendor"], result["canonical_product"])
+            state["search_name"] = search_name
+            
+            state["enrichment_method"] = f"os_package_{result['resolution_method']}"
+            state["confidence"] = result["confidence"]
+            state["ecosystem"] = ecosystem
+            
+            logger.info(f"[os_package_resolve] Resolved: {component_name} -> {result['canonical_vendor']}/{result['canonical_product']} (search: {search_name})")
+            self._metrics["llm_calls_avoided"] += 1
         
         return state
     
@@ -743,6 +788,11 @@ Important:
             component.purl_name = state.get("purl_name")
             component.nvd_vendor = state.get("nvd_vendor")
             component.nvd_product = state.get("nvd_product")
+            
+            # OS package normalization fields
+            component.package_ecosystem = state.get("package_ecosystem")
+            component.canonical_vendor = state.get("canonical_vendor")
+            component.canonical_product = state.get("canonical_product")
             
             # Use search_name from deterministic/LLM resolver if available
             # Only fall back to PURL-based logic if search_name not set

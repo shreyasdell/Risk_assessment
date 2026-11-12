@@ -40,6 +40,11 @@ class Component(Base):
     purl_namespace = Column(String, nullable=True)  # PURL namespace (URL-decoded)
     purl_name = Column(String, nullable=True)  # PURL name
     
+    # OS Package Normalization fields (NEW)
+    package_ecosystem = Column(String, nullable=True)  # OS package ecosystem (deb, rpm, apk)
+    canonical_vendor = Column(String, nullable=True)  # Canonical upstream vendor (e.g., "gnu" for libc6)
+    canonical_product = Column(String, nullable=True)  # Canonical upstream product (e.g., "glibc" for libc6)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
