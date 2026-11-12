@@ -162,11 +162,11 @@ def upload_codebase(
         from app.core.database import SessionLocal
         import asyncio
         
-        # Get all components for this application
-        components = db.query(Component).filter(Component.application_id == application_id).all()
+        # Get component IDs for this application (not objects, to avoid detached instance error)
+        component_ids = [c.id for c in db.query(Component.id).filter(Component.application_id == application_id).all()]
         
-        if components:
-            print(f"[codebase_upload] Triggering enrichment for {len(components)} components")
+        if component_ids:
+            print(f"[codebase_upload] Triggering enrichment for {len(component_ids)} components")
             
             # Run enrichment in background task to avoid blocking
             def run_enrichment():
@@ -177,11 +177,11 @@ def upload_codebase(
                     asyncio.set_event_loop(loop)
                     try:
                         agent = ComponentEnrichmentAgent(bg_db)
-                        for component in components:
+                        for component_id in component_ids:
                             try:
-                                loop.run_until_complete(agent.enrich_component(component.id))
+                                loop.run_until_complete(agent.enrich_component(component_id))
                             except Exception as e:
-                                print(f"[codebase_upload] Error enriching component {component.id}: {e}")
+                                print(f"[codebase_upload] Error enriching component {component_id}: {e}")
                     finally:
                         loop.close()
                 finally:
