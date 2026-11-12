@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchCVEs, deleteCVE, fetchApplications, syncAllCVEsBackground, getTaskProgress, getRecentTasks, pauseSyncTask, resumeSyncTask, cancelSyncTask } from '../api/client';
+import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,6 +16,7 @@ function CVEsPage() {
   const [syncTask, setSyncTask] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const { canDelete } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadApplications();
@@ -260,6 +262,21 @@ function CVEsPage() {
                   <td style={{ padding: '12px 16px', color: '#606060' }}>{cve.exploit_available ? 'Yes' : 'No'}</td>
                   <td style={{ padding: '12px 16px', color: '#606060' }}>{cve.patch_available ? 'Yes' : 'No'}</td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                    <button 
+                      onClick={() => navigate(`/cves/${cve.id}/recommendations`)}
+                      style={{ 
+                        padding: '6px 12px', 
+                        fontSize: '13px', 
+                        border: '1px solid #D9D9D9', 
+                        borderRadius: '4px', 
+                        backgroundColor: '#0076CE', 
+                        color: '#FFFFFF', 
+                        cursor: 'pointer',
+                        marginRight: '8px'
+                      }}
+                    >
+                      View Recommendations
+                    </button>
                     {canDelete && (
                       <button onClick={() => handleDelete(cve.id)} style={{ background: 'none', border: 'none', color: '#D13438', cursor: 'pointer', fontSize: '13px' }}>Delete</button>
                     )}

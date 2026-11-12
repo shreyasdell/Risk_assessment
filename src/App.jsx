@@ -13,6 +13,7 @@ import VendorsPage from './pages/VendorsPage';
 import ApplicationsPage from './pages/ApplicationsPage';
 import ComponentsPage from './pages/ComponentsPage';
 import CVEsPage from './pages/CVEsPage';
+import CVERecommendationsPage from './pages/CVERecommendationsPage';
 import NISTPage from './pages/NISTPage';
 import RemediationsPage from './pages/RemediationsPage';
 import AuditPage from './pages/AuditPage';
@@ -55,6 +56,7 @@ function AppRoutes() {
         <Route path="applications" element={<ApplicationsPage />} />
         <Route path="components" element={<ComponentsPage />} />
         <Route path="cves" element={<CVEsPage />} />
+        <Route path="cves/:id/recommendations" element={<CVERecommendationsPage />} />
         <Route path="nist" element={<NISTPage />} />
         <Route path="remediations" element={<RemediationsPage />} />
         <Route path="audit" element={<AuditPage />} />

@@ -121,8 +121,6 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/applications', icon: Icons.Applications, label: 'Applications' },
     { path: '/components', icon: Icons.Components, label: 'Components' },
     { path: '/cves', icon: Icons.CVEs, label: 'CVEs' },
-    { path: '/remediations', icon: Icons.Remediations, label: 'Remediations' },
-    { path: '/nist', icon: Icons.NIST, label: 'NIST Recommendations' },
     { path: '/audit', icon: Icons.Audit, label: 'Audit Logs' },
     ...(canManageUsers() ? [{ path: '/settings', icon: Icons.Settings, label: 'Settings' }] : [])
   ];
