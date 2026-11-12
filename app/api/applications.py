@@ -159,6 +159,7 @@ def upload_codebase(
         # Trigger enrichment for the application in background
         from app.agent.langgraph_agent import ComponentEnrichmentAgent
         from app.models.component import Component
+        from app.core.database import SessionLocal
         import asyncio
         
         # Get all components for this application
@@ -169,17 +170,22 @@ def upload_codebase(
             
             # Run enrichment in background task to avoid blocking
             def run_enrichment():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                # Create new database session for background task
+                bg_db = SessionLocal()
                 try:
-                    agent = ComponentEnrichmentAgent(db)
-                    for component in components:
-                        try:
-                            loop.run_until_complete(agent.enrich_component(component.id))
-                        except Exception as e:
-                            print(f"[codebase_upload] Error enriching component {component.id}: {e}")
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        agent = ComponentEnrichmentAgent(bg_db)
+                        for component in components:
+                            try:
+                                loop.run_until_complete(agent.enrich_component(component.id))
+                            except Exception as e:
+                                print(f"[codebase_upload] Error enriching component {component.id}: {e}")
+                    finally:
+                        loop.close()
                 finally:
-                    loop.close()
+                    bg_db.close()
             
             import threading
             enrichment_thread = threading.Thread(target=run_enrichment, daemon=True)
