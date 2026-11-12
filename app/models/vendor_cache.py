@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Index
+from sqlalchemy import Column, Integer, String, DateTime, Index, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -31,4 +31,28 @@ class VendorProductCache(Base):
     __table_args__ = (
         Index('idx_component_ecosystem', 'component_name', 'ecosystem'),
         Index('idx_vendor_product', 'nvd_vendor', 'nvd_product'),
+    )
+
+
+class CPEValidationCache(Base):
+    """
+    Cache table for NVD CPE dictionary validation results.
+    
+    Purpose: Reduce repeated NVD CPE API calls by caching validation results.
+    TTL: 24 hours (NVD CPE dictionary changes infrequently)
+    """
+    __tablename__ = "cpe_validation_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor = Column(String, nullable=False, index=True)
+    product = Column(String, nullable=False, index=True)
+    validation_status = Column(String, nullable=False)  # VALIDATED, NOT_VALIDATED, VALIDATION_ERROR, RATE_LIMITED
+    checked_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # TTL for cache entry
+    hit_count = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Composite unique constraint
+    __table_args__ = (
+        Index('idx_vendor_product_unique', 'vendor', 'product', unique=True),
     )

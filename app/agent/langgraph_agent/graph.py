@@ -126,13 +126,14 @@ class ComponentEnrichmentAgent:
         if not state.get("error") and state.get("cache_miss"):
             state = await self.llm_resolve(state)
             if not state.get("error"):
-                # Validate LLM result
+                # Validate LLM result (informational only, no longer controls caching)
                 state = await self.validate_vendor_product(state)
-                # Only cache if validated
-                if state.get("validated"):
+                # Cache based on identity quality, not CPE validation
+                if self._should_cache(state):
                     self._cache_result(state)
+                    logger.info(f"[enrich_pipeline] Cached enrichment based on identity quality")
                 else:
-                    logger.warning(f"[enrich_pipeline] LLM result not validated, skipping cache")
+                    logger.warning(f"[enrich_pipeline] Enrichment quality too low, skipping cache")
             
             # Run fallbacks if confidence is too low (configurable, default 60)
             if not state.get("error") and state.get("confidence", 0) < 60:
@@ -289,6 +290,36 @@ class ComponentEnrichmentAgent:
             state["cache_miss"] = True
             return state
     
+    def _should_cache(self, state: dict) -> bool:
+        """Determine if enrichment should be cached based on identity quality."""
+        confidence = state.get("confidence", 0)
+        vendor = state.get("nvd_vendor")
+        product = state.get("nvd_product")
+        search_name = state.get("search_name")
+        
+        # Gate 1: Confidence threshold
+        if confidence < 60:
+            return False
+        
+        # Gate 2: Vendor and product must exist
+        if not vendor or not product:
+            return False
+        
+        # Gate 3: Search name must exist
+        if not search_name:
+            return False
+        
+        # Gate 4: Search name must not be a generic name alone
+        if search_name.lower() in self.GENERIC_NAMES:
+            return False
+        
+        # Gate 5: Search name should contain space (vendor package format)
+        # unless it's a well-known single-word package
+        if " " not in search_name:
+            return False
+        
+        return True
+    
     async def llm_resolve(self, state: dict) -> dict:
         """Node 3: Use LLM to resolve vendor/product."""
         logger.info(f"[llm_resolve] Using LLM for {state['name']}")
@@ -369,45 +400,97 @@ Important:
         logger.info(f"[validate] Checking NVD CPE dictionary for {state.get('nvd_vendor')}/{state.get('nvd_product')}")
         
         import httpx
+        from datetime import datetime, timedelta
+        from app.models.vendor_cache import CPEValidationCache
         
         nvd_vendor = state.get("nvd_vendor")
         nvd_product = state.get("nvd_product")
         
         if not nvd_vendor or not nvd_product:
-            state["validation_status"] = "missing_data"
-            state["validated"] = False
+            state["validation_status"] = "MISSING_DATA"
+            state["cpe_validated"] = False
             return state
         
+        # Check validation cache first
+        cache_key = f"{nvd_vendor}:{nvd_product}"
+        cache_entry = self.db.query(CPEValidationCache).filter(
+            CPEValidationCache.vendor == nvd_vendor,
+            CPEValidationCache.product == nvd_product
+        ).first()
+        
+        if cache_entry:
+            # Check if cache entry is still valid (24 hour TTL)
+            if cache_entry.expires_at and cache_entry.expires_at > datetime.utcnow():
+                # Cache hit
+                cache_entry.hit_count += 1
+                self.db.commit()
+                state["validation_status"] = cache_entry.validation_status
+                state["cpe_validated"] = cache_entry.validation_status == "VALIDATED"
+                logger.info(f"[validate] Cache hit: {nvd_vendor}/{nvd_product} - {cache_entry.validation_status}")
+                return state
+            else:
+                # Cache expired, delete it
+                self.db.delete(cache_entry)
+                self.db.commit()
+        
+        # Cache miss - query NVD CPE dictionary API
         try:
-            # Query NVD CPE dictionary API
             cpe_string = f"cpe:2.3:a:{nvd_vendor}:{nvd_product}:*:*:*:*:*:*:*:*"
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.get(
                     "https://services.nvd.nist.gov/rest/json/cpes/2.0",
                     params={"cpeMatchString": cpe_string, "resultsPerPage": 1}
                 )
+                
+                if response.status_code == 429:
+                    # Rate limited
+                    state["validation_status"] = "RATE_LIMITED"
+                    state["cpe_validated"] = False
+                    logger.warning(f"[validate] Rate limited for {nvd_vendor}/{nvd_product}")
+                    
+                    # Cache the rate limit result for 1 hour
+                    cache_entry = CPEValidationCache(
+                        vendor=nvd_vendor,
+                        product=nvd_product,
+                        validation_status="RATE_LIMITED",
+                        expires_at=datetime.utcnow() + timedelta(hours=1)
+                    )
+                    self.db.add(cache_entry)
+                    self.db.commit()
+                    return state
+                
                 response.raise_for_status()
                 data = response.json()
                 
                 # Check if any CPEs match
                 total_results = data.get("totalResults", 0)
                 if total_results > 0:
-                    state["validation_status"] = "validated"
-                    state["validated"] = True
+                    state["validation_status"] = "VALIDATED"
+                    state["cpe_validated"] = True
                     state["confidence"] = 90  # Raise confidence for validated pairs
                     logger.info(f"[validate] VALIDATED: {nvd_vendor}/{nvd_product} exists in NVD CPE dictionary")
                 else:
-                    state["validation_status"] = "not_found"
-                    state["validated"] = False
+                    state["validation_status"] = "NOT_VALIDATED"
+                    state["cpe_validated"] = False
                     state["enrichment_status"] = "unvalidated"
                     logger.warning(f"[validate] NOT VALIDATED: {nvd_vendor}/{nvd_product} not found in NVD CPE dictionary")
+                
+                # Cache the validation result for 24 hours
+                cache_entry = CPEValidationCache(
+                    vendor=nvd_vendor,
+                    product=nvd_product,
+                    validation_status=state["validation_status"],
+                    expires_at=datetime.utcnow() + timedelta(hours=24)
+                )
+                self.db.add(cache_entry)
+                self.db.commit()
                 
                 return state
                 
         except Exception as e:
             logger.error(f"[validate] Error checking NVD CPE dictionary: {e}")
-            state["validation_status"] = "error"
-            state["validated"] = False
+            state["validation_status"] = "VALIDATION_ERROR"
+            state["cpe_validated"] = False
             state["validation_error"] = str(e)
             return state
     
