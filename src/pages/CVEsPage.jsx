@@ -231,7 +231,7 @@ function CVEsPage() {
                   <td style={{ padding: '12px 16px', color: '#202020', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cve.description || '—'}</td>
                   <td style={{ padding: '12px 16px', color: '#606060' }}>{cve.cvss_score || '—'}</td>
                   <td style={{ padding: '12px 16px' }}>
-                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, backgroundColor: cve.severity === 'critical' ? '#FDE8E8' : cve.severity === 'high' ? '#FFF4E5' : cve.severity === 'medium' ? '#FFF4E5' : '#E6F4EA', color: cve.severity === 'critical' ? '#D13438' : cve.severity === 'high' ? '#F4B400' : cve.severity === 'medium' ? '#F4B400' : '#107C10' }}>{cve.severity ? cve.severity.charAt(0).toUpperCase() + cve.severity.slice(1).toLowerCase() : '—'}</span>
+                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500, backgroundColor: cve.severity === 'critical' ? '#FDE8E8' : cve.severity === 'high' ? '#FFF4E5' : cve.severity === 'medium' ? '#FFF9C4' : '#E6F4EA', color: cve.severity === 'critical' ? '#D13438' : cve.severity === 'high' ? '#F4B400' : cve.severity === 'medium' ? '#F57C00' : '#107C10' }}>{cve.severity ? cve.severity.charAt(0).toUpperCase() + cve.severity.slice(1).toLowerCase() : '—'}</span>
                   </td>
                   <td style={{ padding: '12px 16px', color: '#606060' }}>{cve.exploit_available ? 'Yes' : 'No'}</td>
                   <td style={{ padding: '12px 16px', color: '#606060' }}>{cve.patch_available ? 'Yes' : 'No'}</td>

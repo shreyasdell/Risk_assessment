@@ -1065,9 +1065,12 @@ class NVDService:
 
                 existing.description = new_description
 
-                # Use CVE.org CVSS if available, otherwise fetch from NVD, then MITRE
+                # Use CVE.org CVSS if available (v4.0, v3.1, v3.0)
                 cvss_score = parsed_data.get("cvss_score", 0.0)
                 cvss_vector = parsed_data.get("cvss_vector", "")
+                severity = parsed_data.get("severity", "unknown")
+                
+                # Only fallback to NVD if CVE.org has no CVSS at all (v4.0, v3.1, v3.0 all missing)
                 if cvss_score == 0.0:
                     # CVE.org doesn't have CVSS, fetch from NVD
                     nvd_data = self._fetch_cve_from_nvd_sync(cve_id)
@@ -1076,19 +1079,12 @@ class NVDService:
                         if nvd_cvss_score > 0.0:
                             cvss_score = nvd_cvss_score
                             cvss_vector = nvd_cvss_vector
+                            severity = nvd_severity
                             print(f"[NVD] Fetched CVSS from NVD for {cve_id}: {cvss_score}")
-                
-                if cvss_score == 0.0:
-                    # NVD also doesn't have CVSS, fetch from MITRE as fallback
-                    mitre_cvss_score, mitre_cvss_vector, mitre_severity = asyncio.run(self._fetch_cvss_from_mitre(cve_id))
-                    if mitre_cvss_score > 0.0:
-                        cvss_score = mitre_cvss_score
-                        cvss_vector = mitre_cvss_vector
-                        print(f"[MITRE] Fetched CVSS from MITRE for {cve_id}: {cvss_score}")
 
                 existing.cvss_score = cvss_score
                 existing.cvss_vector = cvss_vector
-                existing.severity = parsed_data.get("severity", "unknown")
+                existing.severity = severity
                 existing.cwe_id = parsed_data.get("cwe_id")
                 existing.published_date = self._parse_date(parsed_data.get("published_date"))
                 existing.exploit_available = parsed_data.get("exploit_available", False)
@@ -1118,9 +1114,12 @@ class NVDService:
 
                 description = parsed_data.get("description", "") or nvd_description
 
-                # Use CVE.org CVSS if available, otherwise fetch from NVD
+                # Use CVE.org CVSS if available (v4.0, v3.1, v3.0)
                 cvss_score = parsed_data.get("cvss_score", 0.0)
                 cvss_vector = parsed_data.get("cvss_vector", "")
+                severity = parsed_data.get("severity", "unknown")
+                
+                # Only fallback to NVD if CVE.org has no CVSS at all (v4.0, v3.1, v3.0 all missing)
                 if cvss_score == 0.0:
                     # CVE.org doesn't have CVSS, fetch from NVD
                     nvd_data = self._fetch_cve_from_nvd_sync(cve_id)
@@ -1129,6 +1128,7 @@ class NVDService:
                         if nvd_cvss_score > 0.0:
                             cvss_score = nvd_cvss_score
                             cvss_vector = nvd_cvss_vector
+                            severity = nvd_severity
                             print(f"[NVD] Fetched CVSS from NVD for {cve_id}: {cvss_score}")
 
                 cve_record = CVE(
@@ -1136,7 +1136,7 @@ class NVDService:
                     description=description,
                     cvss_score=cvss_score,
                     cvss_vector=cvss_vector,
-                    severity=parsed_data.get("severity", "unknown"),
+                    severity=severity,
                     cwe_id=parsed_data.get("cwe_id"),
                     published_date=self._parse_date(parsed_data.get("published_date")),
                     exploit_available=parsed_data.get("exploit_available", False),
