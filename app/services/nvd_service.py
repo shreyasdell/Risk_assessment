@@ -771,6 +771,82 @@ class NVDService:
 
         return (0.0, "", "UNKNOWN")
 
+    async def _fetch_cvss_from_mitre(self, cve_id: str) -> Tuple[float, str, str]:
+        """Fetch CVSS score from MITRE CVE API as fallback when NVD shows N/A."""
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"https://cveawg.mitre.org/api/cve/{cve_id}",
+                    headers={"Accept": "application/json"}
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    containers = data.get("containers", {})
+                    cna = containers.get("cna", {})
+                    metrics = cna.get("metrics", [])
+                    
+                    for metric in metrics:
+                        # Try CVSS v4.0 first
+                        cvss_v4 = metric.get("cvssV4_0", {})
+                        if cvss_v4:
+                            score = cvss_v4.get("baseScore", 0.0)
+                            vector = cvss_v4.get("vectorString", "")
+                            # CVSS v4.0 doesn't have baseSeverity, calculate from score
+                            if score >= 9.0:
+                                severity = "critical"
+                            elif score >= 7.0:
+                                severity = "high"
+                            elif score >= 4.0:
+                                severity = "medium"
+                            else:
+                                severity = "low"
+                            return (score, vector, severity)
+                        # Try CVSS v3.1
+                        elif "cvssV3_1" in metric:
+                            cvss = metric["cvssV3_1"]
+                            score = cvss.get("baseScore", 0.0)
+                            severity = cvss.get("baseSeverity", "UNKNOWN")
+                            if severity == "UNKNOWN":
+                                if score >= 9.0:
+                                    severity = "CRITICAL"
+                                elif score >= 7.0:
+                                    severity = "HIGH"
+                                elif score >= 4.0:
+                                    severity = "MEDIUM"
+                                else:
+                                    severity = "LOW"
+                            return (score, cvss.get("vectorString", ""), severity.lower())
+                        # Try CVSS v3.0
+                        elif "cvssV3_0" in metric:
+                            cvss = metric["cvssV3_0"]
+                            score = cvss.get("baseScore", 0.0)
+                            severity = cvss.get("baseSeverity", "UNKNOWN")
+                            if severity == "UNKNOWN":
+                                if score >= 9.0:
+                                    severity = "CRITICAL"
+                                elif score >= 7.0:
+                                    severity = "HIGH"
+                                elif score >= 4.0:
+                                    severity = "MEDIUM"
+                                else:
+                                    severity = "LOW"
+                            return (score, cvss.get("vectorString", ""), severity.lower())
+                        # Try CVSS v2.0
+                        elif "cvssV2_0" in metric:
+                            cvss = metric["cvssV2_0"]
+                            score = cvss.get("baseScore", 0.0)
+                            if score >= 7.0:
+                                sev = "HIGH"
+                            elif score >= 4.0:
+                                sev = "MEDIUM"
+                            else:
+                                sev = "LOW"
+                            return (score, cvss.get("vectorString", ""), sev.lower())
+        except Exception as e:
+            print(f"[MITRE] Error fetching CVSS for {cve_id}: {e}")
+        
+        return (0.0, "", "unknown")
+
     def _extract_cwe(self, cve_data: Dict) -> Optional[str]:
         """Extract primary CWE ID."""
         for weakness in cve_data.get("weaknesses", []):
@@ -989,7 +1065,7 @@ class NVDService:
 
                 existing.description = new_description
 
-                # Use CVE.org CVSS if available, otherwise fetch from NVD
+                # Use CVE.org CVSS if available, otherwise fetch from NVD, then MITRE
                 cvss_score = parsed_data.get("cvss_score", 0.0)
                 cvss_vector = parsed_data.get("cvss_vector", "")
                 if cvss_score == 0.0:
@@ -1001,6 +1077,14 @@ class NVDService:
                             cvss_score = nvd_cvss_score
                             cvss_vector = nvd_cvss_vector
                             print(f"[NVD] Fetched CVSS from NVD for {cve_id}: {cvss_score}")
+                
+                if cvss_score == 0.0:
+                    # NVD also doesn't have CVSS, fetch from MITRE as fallback
+                    mitre_cvss_score, mitre_cvss_vector, mitre_severity = asyncio.run(self._fetch_cvss_from_mitre(cve_id))
+                    if mitre_cvss_score > 0.0:
+                        cvss_score = mitre_cvss_score
+                        cvss_vector = mitre_cvss_vector
+                        print(f"[MITRE] Fetched CVSS from MITRE for {cve_id}: {cvss_score}")
 
                 existing.cvss_score = cvss_score
                 existing.cvss_vector = cvss_vector

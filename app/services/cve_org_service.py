@@ -137,11 +137,52 @@ class CVEOrgClient:
         cvss_vector = ""
         severity = "unknown"
         for metric in cna.get("metrics", []):
+            # Try CVSS v4.0 first
+            cvss_v4 = metric.get("cvssV4_0", {})
+            if cvss_v4:
+                cvss_score = cvss_v4.get("baseScore", 0.0)
+                cvss_vector = cvss_v4.get("vectorString", "")
+                # CVSS v4.0 doesn't have baseSeverity, calculate from score
+                if cvss_score >= 9.0:
+                    severity = "critical"
+                elif cvss_score >= 7.0:
+                    severity = "high"
+                elif cvss_score >= 4.0:
+                    severity = "medium"
+                else:
+                    severity = "low"
+                break
+            # Try CVSS v3.1
             cvss = metric.get("cvssV3_1", {})
             if cvss:
                 cvss_score = cvss.get("baseScore", 0.0)
                 cvss_vector = cvss.get("vectorString", "")
                 severity = cvss.get("baseSeverity", "unknown").lower()
+                if severity == "unknown":
+                    if cvss_score >= 9.0:
+                        severity = "critical"
+                    elif cvss_score >= 7.0:
+                        severity = "high"
+                    elif cvss_score >= 4.0:
+                        severity = "medium"
+                    else:
+                        severity = "low"
+                break
+            # Try CVSS v3.0
+            cvss = metric.get("cvssV3_0", {})
+            if cvss:
+                cvss_score = cvss.get("baseScore", 0.0)
+                cvss_vector = cvss.get("vectorString", "")
+                severity = cvss.get("baseSeverity", "unknown").lower()
+                if severity == "unknown":
+                    if cvss_score >= 9.0:
+                        severity = "critical"
+                    elif cvss_score >= 7.0:
+                        severity = "high"
+                    elif cvss_score >= 4.0:
+                        severity = "medium"
+                    else:
+                        severity = "low"
                 break
 
         # CWE
