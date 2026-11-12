@@ -15,6 +15,15 @@ class ComponentBase(BaseModel):
     cpe: Optional[str] = Field(None, max_length=500, description="CPE string")
     application_id: Optional[int] = Field(None, ge=1, description="Application ID")
     sbom_id: Optional[str] = Field(None, max_length=100, description="SBOM ID")
+    # PURL fields
+    purl_type: Optional[str] = Field(None, max_length=50, description="PURL type")
+    purl_namespace: Optional[str] = Field(None, max_length=255, description="PURL namespace")
+    purl_name: Optional[str] = Field(None, max_length=255, description="PURL name")
+    # Canonical identity fields
+    canonical_ecosystem: Optional[str] = Field(None, max_length=50, description="Canonical ecosystem")
+    canonical_vendor_identity: Optional[str] = Field(None, max_length=255, description="Canonical vendor identity")
+    canonical_product_identity: Optional[str] = Field(None, max_length=255, description="Canonical product identity")
+    canonical_key: Optional[str] = Field(None, max_length=500, description="Canonical key")
 
     @field_validator('name', 'version')
     @classmethod

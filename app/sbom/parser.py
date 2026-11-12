@@ -155,6 +155,12 @@ class SBOMParser:
         # Parse PURL to extract purl_type, purl_namespace, purl_name
         purl_type, purl_namespace, purl_name = SBOMParser._parse_purl(purl)
 
+        # Resolve canonical identity
+        resolver = CanonicalIdentityResolver()
+        canonical_identity = None
+        if purl:
+            canonical_identity = resolver.resolve_from_purl(purl)
+
         # Enrich name from PURL for ecosystems where name field is incomplete
         # This fixes Composer packages where name is just "framework" but PURL has "laravel/framework"
         enriched_name = SBOMParser._extract_name_from_purl(purl, name)
@@ -164,15 +170,20 @@ class SBOMParser:
             version=version,
             component_type=component_type_enum,
             purl=purl,
-            purl_type=purl_type,
-            purl_namespace=purl_namespace,
-            purl_name=purl_name,
             supplier=supplier,
             description=description,
             license=license_info,
             cpe=cpe,
             application_id=application_id,
-            sbom_id=sbom_id
+            sbom_id=sbom_id,
+            # Add canonical identity fields
+            canonical_ecosystem=canonical_identity["canonical_ecosystem"] if canonical_identity else None,
+            canonical_vendor_identity=canonical_identity["canonical_vendor_identity"] if canonical_identity else None,
+            canonical_product_identity=canonical_identity["canonical_product_identity"] if canonical_identity else None,
+            canonical_key=canonical_identity["canonical_key"] if canonical_identity else None,
+            purl_type=purl_type,
+            purl_namespace=purl_namespace,
+            purl_name=purl_name,
         )
     
     @staticmethod
