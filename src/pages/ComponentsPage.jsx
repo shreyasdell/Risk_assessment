@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchComponents, fetchApplications, createComponent, updateComponent, deleteComponent, syncCVEs, syncAllCVEs, syncAllCVEsBackground, getTaskProgress, fetchLinkedCVEs } from '../api/client';
+import { fetchComponents, fetchApplications, createComponent, updateComponent, deleteComponent, syncCVEs, syncAllCVEs, syncAllCVEsBackground, getTaskProgress, fetchLinkedCVEs, getRecentTasks } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 
@@ -30,7 +30,29 @@ function ComponentsPage() {
         localStorage.removeItem('backgroundSyncTask');
       }
     }
+    // Also check database for running tasks
+    checkForRunningTask();
   }, []);
+
+  const checkForRunningTask = async () => {
+    try {
+      const response = await getRecentTasks('cve_sync', 1);
+      const tasks = response.data || [];
+      
+      if (tasks.length > 0) {
+        const latestTask = tasks[0];
+        if (latestTask.status === 'running' || latestTask.status === 'paused') {
+          setBackgroundTask(latestTask);
+          setBulkSyncing(true);
+          if (latestTask.status === 'running') {
+            resumePolling(latestTask.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error checking for running task:', err);
+    }
+  };
 
   const resumePolling = (taskId) => {
     const pollInterval = setInterval(async () => {

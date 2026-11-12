@@ -18,7 +18,29 @@ function CVEsPage() {
 
   useEffect(() => {
     loadApplications();
+    checkForRunningTask();
   }, []);
+
+  const checkForRunningTask = async () => {
+    try {
+      // Check for recent running tasks
+      const response = await getRecentTasks('cve_sync', 1);
+      const tasks = response.data || [];
+      
+      if (tasks.length > 0) {
+        const latestTask = tasks[0];
+        if (latestTask.status === 'running' || latestTask.status === 'paused') {
+          setSyncTask(latestTask);
+          setSyncing(true);
+          if (latestTask.status === 'running') {
+            pollTaskProgress(latestTask.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error checking for running task:', err);
+    }
+  };
 
   useEffect(() => {
     loadCVEs();
@@ -122,7 +144,9 @@ function CVEsPage() {
     if (syncTask) {
       try {
         await pauseSyncTask(syncTask.id);
-        setSyncTask({ ...syncTask, status: 'paused' });
+        // Poll once to get updated status
+        const response = await getTaskProgress(syncTask.id);
+        setSyncTask(response.data);
       } catch (err) {
         console.error('Error pausing task:', err);
         alert('Failed to pause task');
@@ -134,7 +158,7 @@ function CVEsPage() {
     if (syncTask) {
       try {
         await resumeSyncTask(syncTask.id);
-        setSyncTask({ ...syncTask, status: 'running' });
+        // Resume polling
         pollTaskProgress(syncTask.id);
       } catch (err) {
         console.error('Error resuming task:', err);
@@ -183,8 +207,8 @@ function CVEsPage() {
           {syncing && syncTask && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <span style={{ fontSize: '13px', color: '#606060' }}>
-                {syncTask.status === 'running' && `Syncing: ${syncTask.processed_items}/${syncTask.total_items}`}
-                {syncTask.status === 'paused' && 'Paused'}
+                {syncTask.status === 'running' && `Syncing: ${syncTask.processed_items || 0}/${syncTask.total_items || 0} (${syncTask.progress_percentage || 0}%)`}
+                {syncTask.status === 'paused' && `Paused: ${syncTask.processed_items || 0}/${syncTask.total_items || 0} (${syncTask.progress_percentage || 0}%)`}
                 {syncTask.status === 'completed' && 'Completed'}
                 {syncTask.status === 'failed' && 'Failed'}
                 {syncTask.status === 'cancelled' && 'Cancelled'}
