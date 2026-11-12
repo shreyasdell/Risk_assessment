@@ -45,6 +45,12 @@ class Component(Base):
     canonical_vendor = Column(String, nullable=True)  # Canonical upstream vendor (e.g., "gnu" for libc6)
     canonical_product = Column(String, nullable=True)  # Canonical upstream product (e.g., "glibc" for libc6)
     
+    # Canonical Component Identity Layer (NEW)
+    canonical_ecosystem = Column(String, nullable=True, index=True)  # Canonical ecosystem (composer, maven, npm, etc.)
+    canonical_vendor_identity = Column(String, nullable=True, index=True)  # Canonical vendor identity
+    canonical_product_identity = Column(String, nullable=True, index=True)  # Canonical product identity
+    canonical_key = Column(String, nullable=True, index=True, unique=True)  # Unique key: ecosystem:vendor:product
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

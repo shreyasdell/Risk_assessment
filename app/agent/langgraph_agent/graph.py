@@ -127,7 +127,10 @@ class ComponentEnrichmentAgent:
             "validation_error": None
         }
         
-        # Step 1: Plain text parsing (Layer 1 - fastest)
+        # Step 1: Canonical identity resolution (Layer 0 - highest priority)
+        state = await self.resolve_canonical_identity(state)
+        
+        # Step 2: Plain text parsing (Layer 1 - fastest)
         state = await self.plain_text_resolve(state)
         
         # Step 2: Parse PURL (Layer 1 - if plain text failed)
@@ -224,6 +227,44 @@ class ComponentEnrichmentAgent:
             "cve_org_calls_before": 0,
             "cve_org_calls_after": 0,
         }
+    
+    async def resolve_canonical_identity(self, state: dict) -> dict:
+        """Layer 0: Resolve canonical identity from PURL, lock file, or code path."""
+        logger.info(f"[canonical_identity] Resolving canonical identity for {state['name']}")
+        
+        from app.agent.canonical_identity.resolver import CanonicalIdentityResolver
+        
+        resolver = CanonicalIdentityResolver()
+        purl = state.get("purl")
+        
+        # Try PURL first (highest priority)
+        if purl:
+            identity = resolver.resolve_from_purl(purl)
+            if identity:
+                state["canonical_ecosystem"] = identity["canonical_ecosystem"]
+                state["canonical_vendor_identity"] = identity["canonical_vendor_identity"]
+                state["canonical_product_identity"] = identity["canonical_product_identity"]
+                state["canonical_key"] = identity["canonical_key"]
+                logger.info(f"[canonical_identity] Resolved from PURL: {identity['canonical_key']}")
+                return state
+        
+        # Fallback: use existing ecosystem/vendor/product if available
+        ecosystem = state.get("ecosystem") or state.get("purl_type")
+        vendor = state.get("nvd_vendor") or state.get("purl_namespace")
+        product = state.get("nvd_product") or state.get("purl_name")
+        
+        if ecosystem and vendor and product:
+            canonical_key = resolver.generate_canonical_key(ecosystem, vendor, product)
+            state["canonical_ecosystem"] = ecosystem
+            state["canonical_vendor_identity"] = vendor
+            state["canonical_product_identity"] = product
+            state["canonical_key"] = canonical_key
+            logger.info(f"[canonical_identity] Resolved from existing fields: {canonical_key}")
+            return state
+        
+        # Final fallback: use component name
+        logger.info(f"[canonical_identity] No canonical identity resolved, using component name")
+        return state
     
     async def plain_text_resolve(self, state: dict) -> dict:
         """Layer 1: Parse plain text component name without PURL."""
@@ -401,21 +442,24 @@ class ComponentEnrichmentAgent:
             return state
     
     async def check_cache(self, state: dict) -> dict:
-        """Node 2: Check vendor/product cache (in-memory + database)."""
+        """Node 2: Check vendor/product cache (in-memory + database) using canonical key."""
         logger.info(f"[check_cache] Checking cache for {state['name']}")
         
         from app.models.vendor_cache import VendorProductCache
         from sqlalchemy.sql import func
         
-        # Build cache key from PURL fields
+        # Build cache key from canonical_key if available, otherwise PURL fields
         cache_key = None
-        if state.get("purl_type") and state.get("purl_name"):
+        if state.get("canonical_key"):
+            cache_key = state["canonical_key"]
+            logger.info(f"[check_cache] Using canonical_key: {cache_key}")
+        elif state.get("purl_type") and state.get("purl_name"):
             cache_key = f"{state['purl_type']}:{state.get('purl_namespace', '')}:{state['purl_name']}"
+            logger.info(f"[check_cache] Using PURL-based key: {cache_key}")
         else:
-            # Fallback to component name if PURL fields not available
+            # Fallback to component name if no other key available
             cache_key = state["name"]
-        
-        logger.info(f"[check_cache] Cache key: {cache_key}")
+            logger.info(f"[check_cache] Using component name as key: {cache_key}")
         
         # Check in-memory cache first
         if cache_key in self._memory_cache:
@@ -812,6 +856,12 @@ Important:
             component.package_ecosystem = state.get("package_ecosystem")
             component.canonical_vendor = state.get("canonical_vendor")
             component.canonical_product = state.get("canonical_product")
+            
+            # Canonical identity layer fields
+            component.canonical_ecosystem = state.get("canonical_ecosystem")
+            component.canonical_vendor_identity = state.get("canonical_vendor_identity")
+            component.canonical_product_identity = state.get("canonical_product_identity")
+            component.canonical_key = state.get("canonical_key")
             
             # Use search_name from deterministic/LLM resolver if available
             # Only fall back to PURL-based logic if search_name not set
