@@ -59,6 +59,18 @@ class ComponentEnrichmentAgent:
     # In-memory cache (simple dict for now, could use LRU cache)
     _memory_cache = {}
     
+    # Metrics tracking
+    _metrics = {
+        "identity_cache_hits": 0,
+        "identity_cache_misses": 0,
+        "cpe_validated_count": 0,
+        "cpe_not_validated_count": 0,
+        "validation_cache_hits": 0,
+        "validation_cache_misses": 0,
+        "llm_calls_avoided": 0,
+        "nvd_validation_calls_avoided": 0,
+    }
+    
     # Generic names that should not be used alone for keyword search
     GENERIC_NAMES = {
         "proxy", "math", "lexer", "process", "framework", "core", "utils",
@@ -165,6 +177,23 @@ class ComponentEnrichmentAgent:
     #  Node implementations
     # ──────────────────────────────────────────────────────────────
     
+    def get_metrics(self) -> dict:
+        """Get current enrichment metrics."""
+        return self._metrics.copy()
+    
+    def reset_metrics(self) -> None:
+        """Reset enrichment metrics."""
+        self._metrics = {
+            "identity_cache_hits": 0,
+            "identity_cache_misses": 0,
+            "cpe_validated_count": 0,
+            "cpe_not_validated_count": 0,
+            "validation_cache_hits": 0,
+            "validation_cache_misses": 0,
+            "llm_calls_avoided": 0,
+            "nvd_validation_calls_avoided": 0,
+        }
+    
     async def parse_purl(self, state: dict) -> dict:
         """Node 1: Parse PURL to extract ecosystem, namespace, and name per PURL spec."""
         logger.info(f"[parse_purl] Processing PURL: {state.get('purl')}")
@@ -257,6 +286,7 @@ class ComponentEnrichmentAgent:
             state["nvd_product"] = cached["nvd_product"]
             state["enrichment_method"] = "memory_cache"
             state["confidence"] = cached["confidence"]
+            self._metrics["identity_cache_hits"] += 1
             logger.info(f"[check_cache] Memory cache hit: {cached['nvd_vendor']}/{cached['nvd_product']}")
             return state
         
@@ -283,9 +313,11 @@ class ComponentEnrichmentAgent:
                 "confidence": cache_entry.confidence
             }
             
+            self._metrics["identity_cache_hits"] += 1
             logger.info(f"[check_cache] Database cache hit: {cache_entry.nvd_vendor}/{cache_entry.nvd_product}")
             return state
         else:
+            self._metrics["identity_cache_misses"] += 1
             logger.info(f"[check_cache] Cache miss")
             state["cache_miss"] = True
             return state
@@ -426,6 +458,8 @@ Important:
                 self.db.commit()
                 state["validation_status"] = cache_entry.validation_status
                 state["cpe_validated"] = cache_entry.validation_status == "VALIDATED"
+                self._metrics["validation_cache_hits"] += 1
+                self._metrics["nvd_validation_calls_avoided"] += 1
                 logger.info(f"[validate] Cache hit: {nvd_vendor}/{nvd_product} - {cache_entry.validation_status}")
                 return state
             else:
@@ -434,6 +468,7 @@ Important:
                 self.db.commit()
         
         # Cache miss - query NVD CPE dictionary API
+        self._metrics["validation_cache_misses"] += 1
         try:
             cpe_string = f"cpe:2.3:a:{nvd_vendor}:{nvd_product}:*:*:*:*:*:*:*:*"
             async with httpx.AsyncClient(timeout=30) as client:
@@ -468,11 +503,13 @@ Important:
                     state["validation_status"] = "VALIDATED"
                     state["cpe_validated"] = True
                     state["confidence"] = 90  # Raise confidence for validated pairs
+                    self._metrics["cpe_validated_count"] += 1
                     logger.info(f"[validate] VALIDATED: {nvd_vendor}/{nvd_product} exists in NVD CPE dictionary")
                 else:
                     state["validation_status"] = "NOT_VALIDATED"
                     state["cpe_validated"] = False
                     state["enrichment_status"] = "unvalidated"
+                    self._metrics["cpe_not_validated_count"] += 1
                     logger.warning(f"[validate] NOT VALIDATED: {nvd_vendor}/{nvd_product} not found in NVD CPE dictionary")
                 
                 # Cache the validation result for 24 hours
