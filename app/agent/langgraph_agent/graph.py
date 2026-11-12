@@ -127,18 +127,22 @@ class ComponentEnrichmentAgent:
             "validation_error": None
         }
         
-        # Step 1: Parse PURL
-        state = await self.parse_purl(state)
+        # Step 1: Plain text parsing (Layer 1 - fastest)
+        state = await self.plain_text_resolve(state)
         
-        # Step 2: Check cache
-        if not state.get("error"):
+        # Step 2: Parse PURL (Layer 1 - if plain text failed)
+        if not state.get("nvd_vendor") and not state.get("error"):
+            state = await self.parse_purl(state)
+        
+        # Step 3: Check cache (Layer 2)
+        if not state.get("error") and state.get("cache_miss", True):
             state = await self.check_cache(state)
         
-        # Step 3: Deterministic resolution if cache miss
-        if not state.get("error") and state.get("cache_miss"):
+        # Step 4: Deterministic resolution (Layer 1 - if cache miss and no vendor yet)
+        if not state.get("error") and state.get("cache_miss") and not state.get("nvd_vendor"):
             state = await self.deterministic_resolve(state)
         
-        # Step 4: LLM resolve only if deterministic failed
+        # Step 5: LLM resolve only if all previous layers failed (Layer 3)
         if not state.get("error") and state.get("cache_miss") and not state.get("nvd_vendor"):
             state = await self.llm_resolve(state)
             if not state.get("error"):
@@ -151,15 +155,15 @@ class ComponentEnrichmentAgent:
                 else:
                     logger.warning(f"[enrich_pipeline] Enrichment quality too low, skipping cache")
         
-        # Step 5: Validate deterministic result (if successful)
-        if not state.get("error") and state.get("nvd_vendor") and state.get("resolution_method") == "deterministic":
+        # Step 6: Validate deterministic result (if successful)
+        if not state.get("error") and state.get("nvd_vendor") and state.get("resolution_method") in ["deterministic", "plain_text"]:
             state = await self.validate_vendor_product(state)
             # Cache based on identity quality
             if self._should_cache(state):
                 self._cache_result(state)
-                logger.info(f"[enrich_pipeline] Cached deterministic enrichment")
+                logger.info(f"[enrich_pipeline] Cached deterministic/plain_text enrichment")
         
-        # Step 6: Run fallbacks if confidence is too low (configurable, default 60)
+        # Step 7: Run fallbacks if confidence is too low (configurable, default 60)
         if not state.get("error") and state.get("confidence", 0) < 60:
             logger.warning(f"[enrich_pipeline] Confidence {state.get('confidence')} below threshold 60, running fallbacks")
             state = await self.fallback_1(state)
@@ -172,11 +176,11 @@ class ComponentEnrichmentAgent:
             if not state.get("error") and not state.get("cache_miss"):
                 self._metrics["llm_calls_avoided"] += 1
         
-        # Step 7: Construct CPE (only if we have vendor/product and no error)
+        # Step 8: Construct CPE (only if we have vendor/product and no error)
         if not state.get("error") and state.get("nvd_vendor") and state.get("nvd_product"):
             state = await self.construct_cpe(state)
         
-        # Step 5: Fallback chain if errors
+        # Step 9: Fallback chain if errors
         if state.get("error"):
             state = await self.fallback_1(state)
             if state.get("error"):
@@ -184,7 +188,7 @@ class ComponentEnrichmentAgent:
                 if state.get("error"):
                     state = await self.fallback_3(state)
         
-        # Step 6: Update component
+        # Step 10: Update component
         state = await self.update_component(state)
         
         return state
@@ -209,6 +213,69 @@ class ComponentEnrichmentAgent:
             "llm_calls_avoided": 0,
             "nvd_validation_calls_avoided": 0,
         }
+    
+    async def plain_text_resolve(self, state: dict) -> dict:
+        """Layer 1: Parse plain text component name without PURL."""
+        logger.info(f"[plain_text_resolve] Parsing plain text: {state['name']}")
+        
+        name = state["name"]
+        
+        # Try to parse vendor/package format
+        if "/" in name and not name.startswith("@"):
+            # Composer format: guzzlehttp/guzzle
+            vendor, product = name.split("/", 1)
+            state["nvd_vendor"] = vendor
+            state["nvd_product"] = product
+            state["search_name"] = f"{vendor} {product}"
+            state["ecosystem"] = "composer"
+            state["confidence"] = 85
+            state["enrichment_method"] = "plain_text"
+            self._metrics["llm_calls_avoided"] += 1
+            logger.info(f"[plain_text_resolve] Resolved: {vendor}/{product}")
+            return state
+        
+        # Try npm scoped format: @angular/core
+        if name.startswith("@") and "/" in name:
+            vendor, product = name.split("/", 1)
+            vendor = vendor.lstrip("@")
+            state["nvd_vendor"] = vendor
+            state["nvd_product"] = product
+            state["search_name"] = f"{vendor} {product}"
+            state["ecosystem"] = "npm"
+            state["confidence"] = 85
+            state["enrichment_method"] = "plain_text"
+            self._metrics["llm_calls_avoided"] += 1
+            logger.info(f"[plain_text_resolve] Resolved: {vendor}/{product}")
+            return state
+        
+        # Try Maven-like dot notation: org.apache.logging.log4j
+        if "." in name and name.count(".") >= 2:
+            parts = name.split(".")
+            if len(parts) >= 3:
+                # org.apache.logging.log4j -> apache/log4j
+                vendor = parts[1]  # apache
+                product = parts[-1]  # log4j
+                state["nvd_vendor"] = vendor
+                state["nvd_product"] = product
+                state["search_name"] = f"{vendor} {product}"
+                state["ecosystem"] = "maven"
+                state["confidence"] = 80
+                state["enrichment_method"] = "plain_text"
+                self._metrics["llm_calls_avoided"] += 1
+                logger.info(f"[plain_text_resolve] Resolved: {vendor}/{product}")
+                return state
+        
+        # Single name - assume ecosystem from supplier or default to pypi
+        state["nvd_vendor"] = name
+        state["nvd_product"] = name
+        state["search_name"] = name
+        state["ecosystem"] = state.get("ecosystem", "pypi")
+        state["confidence"] = 70
+        state["enrichment_method"] = "plain_text"
+        self._metrics["llm_calls_avoided"] += 1
+        logger.info(f"[plain_text_resolve] Resolved single name: {name}")
+        
+        return state
     
     async def parse_purl(self, state: dict) -> dict:
         """Node 1: Parse PURL to extract ecosystem, namespace, and name per PURL spec."""
@@ -677,15 +744,18 @@ Important:
             component.nvd_vendor = state.get("nvd_vendor")
             component.nvd_product = state.get("nvd_product")
             
-            # Always build search_name from purl_namespace + " " + purl_name for namespaced ecosystems
-            if state.get("purl_namespace") and state.get("purl_name"):
+            # Use search_name from deterministic/LLM resolver if available
+            # Only fall back to PURL-based logic if search_name not set
+            if state.get("search_name"):
+                component.search_name = state["search_name"]
+            elif state.get("purl_namespace") and state.get("purl_name"):
                 # Check if namespace is redundant (e.g., guzzlehttp/guzzle → guzzle)
                 if state["purl_namespace"].lower() in state["purl_name"].lower():
                     component.search_name = state["purl_name"]
                 else:
                     component.search_name = f"{state['purl_namespace']} {state['purl_name']}"
             else:
-                component.search_name = state.get("search_name", state["name"])
+                component.search_name = state.get("name")
             
             component.clean_version = state.get("clean_version")
             component.constructed_cpe = state.get("constructed_cpe")
