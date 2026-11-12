@@ -155,6 +155,10 @@ class ComponentEnrichmentAgent:
                     state = await self.fallback_2(state)
                     if state.get("error"):
                         state = await self.fallback_3(state)
+        else:
+            # Cache hit - LLM call avoided
+            if not state.get("error") and not state.get("cache_miss"):
+                self._metrics["llm_calls_avoided"] += 1
         
         # Step 4: Construct CPE (only if we have vendor/product and no error)
         if not state.get("error") and state.get("nvd_vendor") and state.get("nvd_product"):
