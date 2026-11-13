@@ -143,17 +143,28 @@ function CVERecommendationsPage() {
         <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>Weakness Information</h2>
           <div style={{ fontSize: '14px', color: '#404040' }}>
-            <p style={{ marginBottom: '8px' }}>
-              <strong>CWE ID:</strong> {cve.cwe_id}
-            </p>
-            <a
-              href={`https://cwe.mitre.org/data/definitions/${cve.cwe_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: '#0076CE', textDecoration: 'none' }}
-            >
-              View CWE Details →
-            </a>
+            {(() => {
+              // Handle multiple CWEs (comma-separated or array)
+              const cweIds = cve.cwe_id.includes(',') 
+                ? cve.cwe_id.split(',').map(id => id.trim())
+                : [cve.cwe_id];
+              
+              return cweIds.map((cweId, index) => (
+                <div key={index} style={{ marginBottom: index < cweIds.length - 1 ? '12px' : '0' }}>
+                  <p style={{ marginBottom: '4px' }}>
+                    <strong>CWE ID:</strong> {cweId}
+                  </p>
+                  <a
+                    href={`https://cwe.mitre.org/data/definitions/${cweId}.html`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#0076CE', textDecoration: 'none' }}
+                  >
+                    View CWE Details →
+                  </a>
+                </div>
+              ));
+            })()}
           </div>
         </div>
       )}
