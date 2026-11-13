@@ -15,6 +15,9 @@ function ComponentsPage() {
 
   // Restore background task from localStorage on mount
   useEffect(() => {
+    // Reset application filter on page load
+    setSelectedApplication('');
+    
     const savedTask = localStorage.getItem('backgroundSyncTask');
     if (savedTask) {
       try {
