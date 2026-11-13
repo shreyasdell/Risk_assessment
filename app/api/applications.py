@@ -213,6 +213,7 @@ def upload_codebase(
             # Run enrichment in background task to avoid blocking
             def run_enrichment():
                 # Create new database session for background task
+                from app.core.database import SessionLocal
                 bg_db = SessionLocal()
                 try:
                     from app.agent.langgraph_agent import ComponentEnrichmentAgent

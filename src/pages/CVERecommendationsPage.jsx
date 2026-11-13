@@ -144,12 +144,20 @@ function CVERecommendationsPage() {
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>References to Advisories, Solutions and Tools</h2>
           <div style={{ fontSize: '14px', color: '#404040' }}>
             {(() => {
-              // Parse references from text field (assuming JSON or newline-separated format)
+              // Parse references from text field
               let references = [];
               try {
                 // Try parsing as JSON first
                 if (cve.references.startsWith('[') || cve.references.startsWith('{')) {
                   references = JSON.parse(cve.references);
+                } else if (cve.references.includes(',')) {
+                  // Handle comma-separated URLs (legacy format)
+                  const urls = cve.references.split(',').map(url => url.trim()).filter(url => url);
+                  references = urls.map(url => ({
+                    url: url,
+                    source: 'CVE',
+                    tags: ''
+                  }));
                 } else {
                   // Parse as newline-separated format: URL|Source|Tags
                   references = cve.references.split('\n').map(line => {
@@ -163,7 +171,13 @@ function CVERecommendationsPage() {
                 }
               } catch (e) {
                 console.error('Error parsing references:', e);
-                return <p style={{ color: '#606060', fontStyle: 'italic' }}>No references available</p>;
+                // Fallback: treat as comma-separated URLs
+                const urls = cve.references.split(',').map(url => url.trim()).filter(url => url);
+                references = urls.map(url => ({
+                  url: url,
+                  source: 'CVE',
+                  tags: ''
+                }));
               }
 
               if (references.length === 0) {
@@ -231,21 +245,33 @@ function CVERecommendationsPage() {
                 ? cve.cwe_id.split(',').map(id => id.trim())
                 : [cve.cwe_id];
               
-              return cweIds.map((cweId, index) => (
-                <div key={index} style={{ marginBottom: index < cweIds.length - 1 ? '12px' : '0' }}>
-                  <p style={{ marginBottom: '4px' }}>
-                    <strong>CWE ID:</strong> {cweId}
-                  </p>
-                  <a
-                    href={`https://cwe.mitre.org/data/definitions/${cweId}.html`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: '#0076CE', textDecoration: 'none' }}
-                  >
-                    View CWE Details →
-                  </a>
-                </div>
-              ));
+              return (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>CWE ID</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Link</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cweIds.map((cweId, index) => (
+                      <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                        <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{cweId}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <a
+                            href={`https://cwe.mitre.org/data/definitions/${cweId}.html`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#0076CE', textDecoration: 'none' }}
+                          >
+                            View CWE Details →
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
             })()}
           </div>
         </div>
