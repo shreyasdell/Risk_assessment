@@ -35,6 +35,8 @@ class CodebaseAnalyzer:
         self.parsers = {
             'package.json': self._parse_npm,
             'package-lock.json': self._parse_npm_lock,
+            'yarn.lock': self._parse_yarn_lock,
+            'pnpm-lock.yaml': self._parse_pnpm_lock,
             'requirements.txt': self._parse_python,
             'pyproject.toml': self._parse_python_toml,
             'poetry.lock': self._parse_poetry_lock,
@@ -190,6 +192,18 @@ class CodebaseAnalyzer:
             })
         
         return components
+
+    def _parse_yarn_lock(self, file_path: Path) -> List[Dict]:
+        """Parse yarn.lock for exact versions (includes transitive dependencies)"""
+        # Yarn lock format is complex, for now return empty and log warning
+        logger.warning(f"yarn.lock parsing not yet implemented for {file_path}")
+        return []
+
+    def _parse_pnpm_lock(self, file_path: Path) -> List[Dict]:
+        """Parse pnpm-lock.yaml for exact versions (includes transitive dependencies)"""
+        # pnpm lock format is YAML, for now return empty and log warning
+        logger.warning(f"pnpm-lock.yaml parsing not yet implemented for {file_path}")
+        return []
 
     def _parse_python(self, file_path: Path) -> List[Dict]:
         """Parse requirements.txt"""
