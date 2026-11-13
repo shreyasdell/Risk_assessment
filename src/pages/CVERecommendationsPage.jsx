@@ -222,7 +222,6 @@ function CVERecommendationsPage() {
                               {tag.trim()}
                             </span>
                           ))}
-                          {!ref.tags && '—'}
                         </td>
                       </tr>
                     ))}
