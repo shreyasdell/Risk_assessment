@@ -208,20 +208,27 @@ function CVERecommendationsPage() {
                         </td>
                         <td style={{ padding: '12px 16px', color: '#606060' }}>{ref.source || '—'}</td>
                         <td style={{ padding: '12px 16px' }}>
-                          {ref.tags && ref.tags.split(',').map((tag, tagIndex) => (
-                            <span key={tagIndex} style={{ 
-                              display: 'inline-block', 
-                              padding: '2px 8px', 
-                              borderRadius: '4px', 
-                              fontSize: '11px', 
-                              backgroundColor: '#E5F3FF', 
-                              color: '#0076CE',
-                              marginRight: '4px',
-                              marginBottom: '4px'
-                            }}>
-                              {tag.trim()}
-                            </span>
-                          ))}
+                          {ref.tags && ref.tags.split(',').map((tag, tagIndex) => {
+                            const trimmedTag = tag.trim();
+                            // Filter out MISC tags
+                            if (trimmedTag === 'x_refsource_MISC' || trimmedTag === 'MISC') {
+                              return null;
+                            }
+                            return (
+                              <span key={tagIndex} style={{ 
+                                display: 'inline-block', 
+                                padding: '2px 8px', 
+                                borderRadius: '4px', 
+                                fontSize: '11px', 
+                                backgroundColor: '#E5F3FF', 
+                                color: '#0076CE',
+                                marginRight: '4px',
+                                marginBottom: '4px'
+                              }}>
+                                {trimmedTag}
+                              </span>
+                            );
+                          })}
                         </td>
                       </tr>
                     ))}
