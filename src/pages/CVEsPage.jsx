@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchCVEs, deleteCVE, fetchApplications, syncAllCVEsBackground, getTaskProgress, getRecentTasks, pauseSyncTask, resumeSyncTask, cancelSyncTask } from '../api/client';
+import { fetchCVEs, deleteCVE, fetchApplications, syncAllCVEsBackground, getTaskProgress, pauseSyncTask, resumeSyncTask, cancelSyncTask } from '../api/client';
 import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
@@ -31,17 +31,15 @@ function CVEsPage() {
 
   const checkForRunningTask = async () => {
     try {
-      // Check for recent running tasks
-      const response = await getRecentTasks('cve_sync', 1);
-      const tasks = response.data || [];
-      
-      if (tasks.length > 0) {
-        const latestTask = tasks[0];
-        if (latestTask.status === 'running' || latestTask.status === 'paused') {
-          setSyncTask(latestTask);
+      // Check localStorage for running task state
+      const savedTask = localStorage.getItem('cve_sync_task');
+      if (savedTask) {
+        const task = JSON.parse(savedTask);
+        if (task.status === 'running' || task.status === 'paused') {
+          setSyncTask(task);
           setSyncing(true);
-          if (latestTask.status === 'running') {
-            pollTaskProgress(latestTask.id);
+          if (task.status === 'running') {
+            pollTaskProgress(task.id);
           }
         }
       }

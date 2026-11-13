@@ -15,6 +15,7 @@ from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
 from app.models.codebase_upload import CodebaseUpload
+from app.models.component import Component
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
@@ -155,10 +156,9 @@ def upload_codebase(
         new_component_creates = []
         if component_creates:
             try:
-                # Get existing canonical_keys for this application to avoid duplicates
+                # Get existing canonical_keys globally (not just for this application)
                 existing_canonical_keys = set()
                 existing_components = db.query(Component.canonical_key).filter(
-                    Component.application_id == application_id,
                     Component.canonical_key.isnot(None)
                 ).all()
                 existing_canonical_keys = {ck[0] for ck in existing_components}
@@ -182,7 +182,6 @@ def upload_codebase(
         component_ids = []
         if new_component_creates:
             from app.agent.langgraph_agent import ComponentEnrichmentAgent
-            from app.models.component import Component
             from app.core.database import SessionLocal
             import asyncio
             
@@ -204,11 +203,23 @@ def upload_codebase(
                     asyncio.set_event_loop(loop)
                     try:
                         agent = ComponentEnrichmentAgent(bg_db)
-                        for component_id in component_ids:
-                            try:
-                                loop.run_until_complete(agent.enrich_component(component_id))
-                            except Exception as e:
-                                print(f"[codebase_upload] Error enriching component {component_id}: {e}")
+                        
+                        # Use semaphore to limit concurrent enrichments (respect rate limits)
+                        # Max 5 concurrent enrichments to avoid overwhelming NVD API
+                        semaphore = asyncio.Semaphore(5)
+                        
+                        async def enrich_with_semaphore(component_id):
+                            async with semaphore:
+                                try:
+                                    await agent.enrich_component(component_id)
+                                except Exception as e:
+                                    print(f"[codebase_upload] Error enriching component {component_id}: {e}")
+                        
+                        # Run all enrichments in parallel
+                        tasks = [enrich_with_semaphore(cid) for cid in component_ids]
+                        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+                        
+                        print(f"[codebase_upload] Completed enrichment for {len(component_ids)} components")
                     finally:
                         loop.close()
                 finally:
