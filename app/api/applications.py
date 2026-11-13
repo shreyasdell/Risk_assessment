@@ -112,9 +112,14 @@ def upload_codebase(
         buffer.write(content)
 
     # Analyze the codebase to extract components
+    components_extracted = 0
+    components_created = 0
+    components_skipped = 0
+    
     try:
         components_data = codebase_analyzer.analyze_zip(str(file_path))
-        print(f"[codebase_upload] Extracted {len(components_data)} components from codebase")
+        components_extracted = len(components_data)
+        print(f"[codebase_upload] Extracted {components_extracted} components from codebase")
         
         # Convert to ComponentCreate objects
         from app.schemas.component import ComponentCreate
@@ -169,9 +174,14 @@ def upload_codebase(
                     if cc.canonical_key not in existing_canonical_keys
                 ]
                 
+                duplicate_count = len(component_creates) - len(new_component_creates)
+                components_skipped = duplicate_count
+                print(f"[codebase_upload] Found {duplicate_count} duplicate components (skipped)")
+                
                 if new_component_creates:
                     created_components = create_components_bulk(db, new_component_creates)
-                    print(f"[codebase_upload] Created {len(created_components)} components in database")
+                    components_created = len(created_components)
+                    print(f"[codebase_upload] Created {components_created} new components in database")
                 else:
                     print(f"[codebase_upload] All components already exist, skipping creation")
             except Exception as e:
@@ -251,6 +261,7 @@ def upload_codebase(
     return {
         "message": "Codebase uploaded and processed successfully",
         "upload_id": upload_id,
-        "components_extracted": len(components_data) if 'components_data' in locals() else 0,
-        "components_created": len(new_component_creates) if 'new_component_creates' in locals() else 0
+        "components_extracted": components_extracted,
+        "components_created": components_created,
+        "components_skipped": components_skipped
     }
