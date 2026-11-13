@@ -167,12 +167,27 @@ def upload_codebase(
                     Component.canonical_key.isnot(None)
                 ).all()
                 existing_canonical_keys = {ck[0] for ck in existing_components}
+                print(f"[codebase_upload] Found {len(existing_canonical_keys)} existing canonical_keys in database")
+                
+                # Also check for duplicates within the current batch
+                batch_canonical_keys = set()
+                deduplicated_creates = []
+                for cc in component_creates:
+                    if cc.canonical_key:
+                        if cc.canonical_key in batch_canonical_keys:
+                            # Duplicate within batch, skip this one
+                            print(f"[codebase_upload] Skipping duplicate within batch: {cc.canonical_key}")
+                            continue
+                        batch_canonical_keys.add(cc.canonical_key)
+                    deduplicated_creates.append(cc)
                 
                 # Filter out components that already exist
-                new_component_creates = [
-                    cc for cc in component_creates 
-                    if cc.canonical_key not in existing_canonical_keys
-                ]
+                new_component_creates = []
+                for cc in deduplicated_creates:
+                    if cc.canonical_key and cc.canonical_key in existing_canonical_keys:
+                        print(f"[codebase_upload] Skipping existing component: {cc.canonical_key}")
+                    else:
+                        new_component_creates.append(cc)
                 
                 duplicate_count = len(component_creates) - len(new_component_creates)
                 components_skipped = duplicate_count
@@ -182,6 +197,9 @@ def upload_codebase(
                     created_components = create_components_bulk(db, new_component_creates)
                     components_created = len(created_components)
                     print(f"[codebase_upload] Created {components_created} new components in database")
+                    
+                    # Get component IDs from the created components
+                    component_ids = [c.id for c in created_components]
                 else:
                     print(f"[codebase_upload] All components already exist, skipping creation")
             except Exception as e:
@@ -189,18 +207,6 @@ def upload_codebase(
                 db.rollback()
         
         # Trigger enrichment for newly created components in background
-        component_ids = []
-        if new_component_creates:
-            from app.agent.langgraph_agent import ComponentEnrichmentAgent
-            from app.core.database import SessionLocal
-            import asyncio
-            
-            # Get component IDs for newly created components (not objects, to avoid detached instance error)
-            component_ids = [c.id for c in db.query(Component.id).filter(
-                Component.application_id == application_id,
-                Component.canonical_key.in_([cc.canonical_key for cc in new_component_creates])
-            ).all()]
-        
         if component_ids:
             print(f"[codebase_upload] Triggering enrichment for {len(component_ids)} components")
             
@@ -209,6 +215,9 @@ def upload_codebase(
                 # Create new database session for background task
                 bg_db = SessionLocal()
                 try:
+                    from app.agent.langgraph_agent import ComponentEnrichmentAgent
+                    import asyncio
+                    
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     try:
