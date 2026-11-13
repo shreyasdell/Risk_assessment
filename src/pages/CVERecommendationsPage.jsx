@@ -259,7 +259,7 @@ function CVERecommendationsPage() {
                         <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{cweId}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <a
-                            href={`https://cwe.mitre.org/data/definitions/${cweId}.html`}
+                            href={`https://cwe.mitre.org/data/definitions/${cweId.replace('CWE-', '')}.html`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ color: '#0076CE', textDecoration: 'none' }}

@@ -21,12 +21,6 @@ function CVEsPage() {
   useEffect(() => {
     loadApplications();
     checkForRunningTask();
-    
-    // Restore filter state from localStorage
-    const savedSeverityFilter = localStorage.getItem('cve_severity_filter');
-    const savedApplicationFilter = localStorage.getItem('cve_application_filter');
-    if (savedSeverityFilter) setSeverityFilter(savedSeverityFilter);
-    if (savedApplicationFilter) setApplicationFilter(savedApplicationFilter);
   }, []);
 
   const checkForRunningTask = async () => {
@@ -196,19 +190,13 @@ function CVEsPage() {
           <p style={{ fontSize: '14px', color: '#606060', margin: 0 }}>View and manage Common Vulnerabilities and Exposures</p>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <select value={applicationFilter} onChange={(e) => {
-            setApplicationFilter(e.target.value);
-            localStorage.setItem('cve_application_filter', e.target.value);
-          }} style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }}>
+          <select value={applicationFilter} onChange={(e) => setApplicationFilter(e.target.value)} style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }}>
             <option value="">All Applications</option>
             {applications.map(app => (
               <option key={app.id} value={app.id}>{app.name}</option>
             ))}
           </select>
-          <select value={severityFilter} onChange={(e) => {
-            setSeverityFilter(e.target.value);
-            localStorage.setItem('cve_severity_filter', e.target.value);
-          }} style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }}>
+          <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }}>
             <option value="">All Severities</option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
