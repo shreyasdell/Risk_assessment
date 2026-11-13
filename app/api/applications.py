@@ -151,19 +151,46 @@ def upload_codebase(
                 canonical_key=canonical_identity["canonical_key"] if canonical_identity else None,
             ))
         
-        # Bulk create components
+        # Bulk create components (skip duplicates by canonical_key)
+        new_component_creates = []
         if component_creates:
-            created_components = create_components_bulk(db, component_creates)
-            print(f"[codebase_upload] Created {len(created_components)} components in database")
+            try:
+                # Get existing canonical_keys for this application to avoid duplicates
+                existing_canonical_keys = set()
+                existing_components = db.query(Component.canonical_key).filter(
+                    Component.application_id == application_id,
+                    Component.canonical_key.isnot(None)
+                ).all()
+                existing_canonical_keys = {ck[0] for ck in existing_components}
+                
+                # Filter out components that already exist
+                new_component_creates = [
+                    cc for cc in component_creates 
+                    if cc.canonical_key not in existing_canonical_keys
+                ]
+                
+                if new_component_creates:
+                    created_components = create_components_bulk(db, new_component_creates)
+                    print(f"[codebase_upload] Created {len(created_components)} components in database")
+                else:
+                    print(f"[codebase_upload] All components already exist, skipping creation")
+            except Exception as e:
+                print(f"[codebase_upload] Error creating components: {e}")
+                db.rollback()
         
-        # Trigger enrichment for the application in background
-        from app.agent.langgraph_agent import ComponentEnrichmentAgent
-        from app.models.component import Component
-        from app.core.database import SessionLocal
-        import asyncio
-        
-        # Get component IDs for this application (not objects, to avoid detached instance error)
-        component_ids = [c.id for c in db.query(Component.id).filter(Component.application_id == application_id).all()]
+        # Trigger enrichment for newly created components in background
+        component_ids = []
+        if new_component_creates:
+            from app.agent.langgraph_agent import ComponentEnrichmentAgent
+            from app.models.component import Component
+            from app.core.database import SessionLocal
+            import asyncio
+            
+            # Get component IDs for newly created components (not objects, to avoid detached instance error)
+            component_ids = [c.id for c in db.query(Component.id).filter(
+                Component.application_id == application_id,
+                Component.canonical_key.in_([cc.canonical_key for cc in new_component_creates])
+            ).all()]
         
         if component_ids:
             print(f"[codebase_upload] Triggering enrichment for {len(component_ids)} components")
@@ -193,6 +220,7 @@ def upload_codebase(
         
     except Exception as e:
         print(f"[codebase_upload] Error analyzing codebase: {e}")
+        db.rollback()
         # Still save the upload record even if analysis fails
         pass
 
@@ -209,4 +237,9 @@ def upload_codebase(
     db.add(codebase_upload)
     db.commit()
 
-    return {"message": "Codebase uploaded and processed successfully", "upload_id": upload_id, "components_extracted": len(components_data) if 'components_data' in locals() else 0}
+    return {
+        "message": "Codebase uploaded and processed successfully",
+        "upload_id": upload_id,
+        "components_extracted": len(components_data) if 'components_data' in locals() else 0,
+        "components_created": len(new_component_creates) if 'new_component_creates' in locals() else 0
+    }
