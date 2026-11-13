@@ -138,6 +138,88 @@ function CVERecommendationsPage() {
         </div>
       </div>
 
+      {/* Section 2.5: NVD References */}
+      {cve.references && (
+        <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>References to Advisories, Solutions and Tools</h2>
+          <div style={{ fontSize: '14px', color: '#404040' }}>
+            {(() => {
+              // Parse references from text field (assuming JSON or newline-separated format)
+              let references = [];
+              try {
+                // Try parsing as JSON first
+                if (cve.references.startsWith('[') || cve.references.startsWith('{')) {
+                  references = JSON.parse(cve.references);
+                } else {
+                  // Parse as newline-separated format: URL|Source|Tags
+                  references = cve.references.split('\n').map(line => {
+                    const parts = line.split('|');
+                    return {
+                      url: parts[0]?.trim(),
+                      source: parts[1]?.trim(),
+                      tags: parts[2]?.trim() || ''
+                    };
+                  }).filter(ref => ref.url);
+                }
+              } catch (e) {
+                console.error('Error parsing references:', e);
+                return <p style={{ color: '#606060', fontStyle: 'italic' }}>No references available</p>;
+              }
+
+              if (references.length === 0) {
+                return <p style={{ color: '#606060', fontStyle: 'italic' }}>No references available</p>;
+              }
+
+              return (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>URL</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Source</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Tags</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {references.map((ref, index) => (
+                      <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                        <td style={{ padding: '12px 16px' }}>
+                          <a
+                            href={ref.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#0076CE', textDecoration: 'none', wordBreak: 'break-all' }}
+                          >
+                            {ref.url}
+                          </a>
+                        </td>
+                        <td style={{ padding: '12px 16px', color: '#606060' }}>{ref.source || '—'}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          {ref.tags && ref.tags.split(',').map((tag, tagIndex) => (
+                            <span key={tagIndex} style={{ 
+                              display: 'inline-block', 
+                              padding: '2px 8px', 
+                              borderRadius: '4px', 
+                              fontSize: '11px', 
+                              backgroundColor: '#E5F3FF', 
+                              color: '#0076CE',
+                              marginRight: '4px',
+                              marginBottom: '4px'
+                            }}>
+                              {tag.trim()}
+                            </span>
+                          ))}
+                          {!ref.tags && '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Section 3: Weakness Information */}
       {cve.cwe_id && (
         <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>

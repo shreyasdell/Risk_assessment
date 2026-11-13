@@ -17,6 +17,7 @@ Why use this alongside NVD:
 import httpx
 import asyncio
 import re
+import json
 from typing import Optional, List, Dict, Tuple
 
 # Fix 6: Generic name blocklist - common English words that should require CPE-based lookup
@@ -197,14 +198,19 @@ class CVEOrgClient:
                     cwe_id = cwe
                     break
 
-        # References
+        # References (structured format with URL, source, tags)
         references = []
         exploit_available = False
         patch_available = False
         for ref in cna.get("references", []):
             url = ref.get("url", "")
             tags = ref.get("tags", [])
-            references.append(url)
+            source = ref.get("source", "CVE")
+            references.append({
+                "url": url,
+                "source": source,
+                "tags": ", ".join(tags) if tags else ""
+            })
             if "exploit" in tags:
                 exploit_available = True
             if "patch" in tags:
@@ -266,7 +272,7 @@ class CVEOrgClient:
             "published_date": published,
             "exploit_available": exploit_available,
             "patch_available": patch_available,
-            "references": ", ".join(references[:10]),
+            "references": json.dumps(references[:10]),  # Store as JSON with URL, source, tags
             "nvd_url": f"https://nvd.nist.gov/vuln/detail/{cve_id}",
             # New fields from CVE.org
             "affected_products": affected_products,
