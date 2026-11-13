@@ -95,8 +95,10 @@ class CodebaseAnalyzer:
         dir_path = Path(directory)
         
         # Find all dependency files
+        detected_files = []
         for file_path in dir_path.rglob('*'):
             if file_path.name in self.parsers:
+                detected_files.append(file_path.name)
                 try:
                     file_components = self.parsers[file_path.name](file_path)
                     # Filter out components with empty names
@@ -105,32 +107,58 @@ class CodebaseAnalyzer:
                 except Exception as e:
                     logger.warning(f"Failed to parse {file_path}: {e}")
         
+        logger.info(f"[codebase_analyzer] Detected files: {', '.join(detected_files)}")
+        logger.info(f"[codebase_analyzer] Parsers used: {', '.join(set(detected_files))}")
+        
+        # Count by dependency type
+        dependency_counts = {}
+        for comp in components:
+            dep_type = comp.get('dependency_type', 'unknown')
+            dependency_counts[dep_type] = dependency_counts.get(dep_type, 0) + 1
+        logger.info(f"[codebase_analyzer] Component counts by dependency_type: {dependency_counts}")
+        
         return components
 
     def _parse_npm(self, file_path: Path) -> List[Dict]:
-        """Parse package.json"""
+        """Parse package.json (no lockfile present)"""
         import json
         with open(file_path, 'r') as f:
             data = json.load(f)
         
         components = []
-        dependencies = {**data.get('dependencies', {}), **data.get('devDependencies', {})}
         
+        # Parse production dependencies
+        dependencies = data.get('dependencies', {})
         for name, version in dependencies.items():
-            # Clean version string (remove ^, ~, etc.)
-            clean_version = version.lstrip('^~>=<')
             components.append({
                 'name': name,
-                'version': clean_version,
+                'version': version.lstrip('^~>=<'),
+                'declared_version': version,  # Store original range
+                'dependency_type': 'production',
+                'version_unresolved': True,  # No lockfile, version is unresolved
                 'component_type': 'library',
-                'purl': f'pkg:npm/{name}@{clean_version}',
+                'purl': f'pkg:npm/{name}@{version.lstrip("^~>=<")}',
+                'ecosystem': 'npm'
+            })
+        
+        # Parse dev dependencies
+        devDependencies = data.get('devDependencies', {})
+        for name, version in devDependencies.items():
+            components.append({
+                'name': name,
+                'version': version.lstrip('^~>=<'),
+                'declared_version': version,  # Store original range
+                'dependency_type': 'development',
+                'version_unresolved': True,  # No lockfile, version is unresolved
+                'component_type': 'library',
+                'purl': f'pkg:npm/{name}@{version.lstrip("^~>=<")}',
                 'ecosystem': 'npm'
             })
         
         return components
 
     def _parse_npm_lock(self, file_path: Path) -> List[Dict]:
-        """Parse package-lock.json for exact versions"""
+        """Parse package-lock.json for exact versions (includes transitive dependencies)"""
         import json
         with open(file_path, 'r') as f:
             data = json.load(f)
@@ -140,15 +168,22 @@ class CodebaseAnalyzer:
         
         for name, info in packages.items():
             if name.startswith('node_modules/'):
-                continue  # Skip nested packages
+                continue  # Skip nested packages (they're duplicates)
             if not info.get('version'):
                 continue
             if not name or not name.strip():
                 continue  # Skip empty names
             
+            # Determine dependency type
+            # In package-lock.json, dev dependencies are marked with "dev": true
+            dependency_type = 'development' if info.get('dev', False) else 'production'
+            
             components.append({
                 'name': name,
                 'version': info['version'],
+                'declared_version': info['version'],  # Lockfile has exact versions
+                'dependency_type': dependency_type,
+                'version_unresolved': False,  # Lockfile present, version is resolved
                 'component_type': 'library',
                 'purl': f'pkg:npm/{name}@{info["version"]}',
                 'ecosystem': 'npm'

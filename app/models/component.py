@@ -51,6 +51,11 @@ class Component(Base):
     canonical_product_identity = Column(String, nullable=True, index=True)  # Canonical product identity
     canonical_key = Column(String, nullable=True, index=True, unique=True)  # Unique key: ecosystem:vendor:product
     
+    # Dependency fields (NEW)
+    dependency_type = Column(String, nullable=True, index=True)  # production, development, optional
+    declared_version = Column(String, nullable=True)  # Original version range from package.json (e.g., "^18.3.1")
+    version_unresolved = Column(Boolean, nullable=True, default=False)  # Flag if version is unresolved (no lockfile)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

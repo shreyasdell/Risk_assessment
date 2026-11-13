@@ -155,6 +155,9 @@ def upload_codebase(
                 canonical_vendor_identity=canonical_identity["canonical_vendor_identity"] if canonical_identity else None,
                 canonical_product_identity=canonical_identity["canonical_product_identity"] if canonical_identity else None,
                 canonical_key=canonical_identity["canonical_key"] if canonical_identity else None,
+                dependency_type=comp_data.get('dependency_type'),
+                declared_version=comp_data.get('declared_version'),
+                version_unresolved=comp_data.get('version_unresolved', False),
             ))
         
         # Bulk create components (skip duplicates by canonical_key)

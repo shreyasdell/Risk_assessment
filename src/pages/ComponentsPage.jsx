@@ -339,16 +339,31 @@ function ComponentsPage() {
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Name</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Version</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Type</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Dependency</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Application</th>
               <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#606060' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {components.length === 0 ? <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: '#606060' }}>No components yet</td></tr> : components.map((component) => (
+            {components.length === 0 ? <tr><td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#606060' }}>No components yet</td></tr> : components.map((component) => (
               <tr key={component.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
                 <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{component.name}</td>
                 <td style={{ padding: '12px 16px', color: '#606060' }}>{component.version || '—'}</td>
                 <td style={{ padding: '12px 16px', color: '#606060' }}>{component.component_type || '—'}</td>
+                <td style={{ padding: '12px 16px', color: '#606060' }}>
+                  {component.dependency_type ? (
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      backgroundColor: component.dependency_type === 'production' ? '#E5F3FF' : component.dependency_type === 'development' ? '#FFF4E5' : '#F5F5F5',
+                      color: component.dependency_type === 'production' ? '#0076CE' : component.dependency_type === 'development' ? '#F4B400' : '#606060',
+                      textTransform: 'capitalize'
+                    }}>
+                      {component.dependency_type}
+                    </span>
+                  ) : '—'}
+                </td>
                 <td style={{ padding: '12px 16px', color: '#606060' }}>
                   {component.application_id ? (
                     applications.find(app => app.id === component.application_id)?.name || component.application_id

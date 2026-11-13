@@ -24,6 +24,10 @@ class ComponentBase(BaseModel):
     canonical_vendor_identity: Optional[str] = Field(None, max_length=255, description="Canonical vendor identity")
     canonical_product_identity: Optional[str] = Field(None, max_length=255, description="Canonical product identity")
     canonical_key: Optional[str] = Field(None, max_length=500, description="Canonical key")
+    # Dependency fields
+    dependency_type: Optional[str] = Field(None, max_length=50, description="Dependency type (production, development, optional)")
+    declared_version: Optional[str] = Field(None, max_length=100, description="Declared version range from package.json")
+    version_unresolved: Optional[bool] = Field(None, description="Flag if version is unresolved (no lockfile)")
 
     @field_validator('name', 'version')
     @classmethod
