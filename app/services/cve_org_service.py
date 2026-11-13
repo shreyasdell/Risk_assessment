@@ -189,14 +189,15 @@ class CVEOrgClient:
                         severity = "low"
                 break
 
-        # CWE
-        cwe_id = None
+        # CWE - collect all CWEs
+        cwe_ids = []
         for problem in cna.get("problemTypes", []):
             for desc in problem.get("descriptions", []):
                 cwe = desc.get("cweId")
-                if cwe:
-                    cwe_id = cwe
-                    break
+                if cwe and cwe not in cwe_ids:
+                    cwe_ids.append(cwe)
+        
+        cwe_id = ", ".join(cwe_ids) if cwe_ids else None
 
         # References (structured format with URL, source, tags)
         references = []
