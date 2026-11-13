@@ -99,7 +99,9 @@ class CodebaseAnalyzer:
             if file_path.name in self.parsers:
                 try:
                     file_components = self.parsers[file_path.name](file_path)
-                    components.extend(file_components)
+                    # Filter out components with empty names
+                    valid_components = [c for c in file_components if c.get('name') and c['name'].strip()]
+                    components.extend(valid_components)
                 except Exception as e:
                     logger.warning(f"Failed to parse {file_path}: {e}")
         
@@ -141,6 +143,8 @@ class CodebaseAnalyzer:
                 continue  # Skip nested packages
             if not info.get('version'):
                 continue
+            if not name or not name.strip():
+                continue  # Skip empty names
             
             components.append({
                 'name': name,
@@ -408,11 +412,14 @@ class CodebaseAnalyzer:
         packages = data.get('packages', [])
         
         for pkg in packages:
+            name = pkg.get('name')
+            if not name or not name.strip():
+                continue  # Skip empty names
             components.append({
-                'name': pkg['name'],
+                'name': name,
                 'version': pkg['version'].lstrip('v'),
                 'component_type': 'library',
-                'purl': f'pkg:composer/{pkg["name"]}@{pkg["version"].lstrip("v")}',
+                'purl': f'pkg:composer/{name}@{pkg["version"].lstrip("v")}',
                 'ecosystem': 'php'
             })
         
