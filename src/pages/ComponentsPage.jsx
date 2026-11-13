@@ -333,6 +333,20 @@ function ComponentsPage() {
       </div>
 
       <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
+        {/* Warning for unresolved versions */}
+        {components.some(c => c.version_unresolved) && (
+          <div style={{ 
+            backgroundColor: '#FFF4E5', 
+            border: '1px solid #F4B400', 
+            borderRadius: '4px', 
+            padding: '12px 16px', 
+            marginBottom: '16px',
+            fontSize: '13px',
+            color: '#606060'
+          }}>
+            <strong>⚠️ Warning:</strong> Some components have unresolved versions (no lockfile detected). Transitive dependencies may be missing. Upload a lockfile (package-lock.json, yarn.lock, etc.) for complete dependency analysis.
+          </div>
+        )}
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
