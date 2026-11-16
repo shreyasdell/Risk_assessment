@@ -769,7 +769,24 @@ class NVDService:
                 sev = "LOW"
             return (score, cvss.get("vectorString", ""), sev)
 
-        return (0.0, "", "UNKNOWN")
+        return (0.0, "", "unknown")
+
+    def _extract_references(
+        self,
+        cve_data: Dict
+    ) -> List[Dict]:
+        """Extract references from NVD data in the format expected by the frontend."""
+        references = []
+        for ref in cve_data.get("references", []):
+            url = ref.get("url", "")
+            tags = ref.get("tags", [])
+            source = ref.get("source", "NVD")
+            references.append({
+                "url": url,
+                "source": source,
+                "tags": ", ".join(tags) if tags else ""
+            })
+        return references
 
     async def _fetch_cvss_from_mitre(self, cve_id: str) -> Tuple[float, str, str]:
         """Fetch CVSS score from MITRE CVE API as fallback when NVD shows N/A."""
@@ -1092,6 +1109,15 @@ class NVDService:
                 existing.references = parsed_data.get("references", "")
                 existing.nvd_url = parsed_data.get("nvd_url", "")
 
+                # Fallback: if CVE.org has no references, fetch from NVD
+                if not existing.references or existing.references == "[]":
+                    nvd_data = self._fetch_cve_from_nvd_sync(cve_id)
+                    if nvd_data:
+                        nvd_references = self._extract_references(nvd_data)
+                        if nvd_references:
+                            existing.references = json.dumps(nvd_references)
+                            print(f"[NVD] Fetched references from NVD for {cve_id}")
+
                 # Update agent fields
                 existing.agent_confidence = confidence
                 existing.agent_verdict = "RELEVANT"
@@ -1131,6 +1157,16 @@ class NVDService:
                             severity = nvd_severity
                             print(f"[NVD] Fetched CVSS from NVD for {cve_id}: {cvss_score}")
 
+                # Fallback: if CVE.org has no references, fetch from NVD
+                references = parsed_data.get("references", "")
+                if not references or references == "[]":
+                    nvd_data = self._fetch_cve_from_nvd_sync(cve_id)
+                    if nvd_data:
+                        nvd_references = self._extract_references(nvd_data)
+                        if nvd_references:
+                            references = json.dumps(nvd_references)
+                            print(f"[NVD] Fetched references from NVD for {cve_id}")
+
                 cve_record = CVE(
                     cve_id=cve_id,
                     description=description,
@@ -1141,7 +1177,7 @@ class NVDService:
                     published_date=self._parse_date(parsed_data.get("published_date")),
                     exploit_available=parsed_data.get("exploit_available", False),
                     patch_available=parsed_data.get("patch_available", False),
-                    references=parsed_data.get("references", ""),
+                    references=references,
                     nvd_url=parsed_data.get("nvd_url", ""),
                     # Agent fields
                     agent_confidence=confidence,

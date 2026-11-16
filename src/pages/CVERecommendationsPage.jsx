@@ -225,12 +225,20 @@ function CVERecommendationsPage() {
                             {ref.url}
                           </a>
                         </td>
-                        <td style={{ padding: '12px 16px', color: '#606060' }}>{ref.source || '—'}</td>
+                        <td style={{ padding: '12px 16px', color: '#606060' }}>{ref.source || 'CVE'}</td>
                         <td style={{ padding: '12px 16px' }}>
-                          {ref.tags && ref.tags.length > 0 ? (
-                            ref.tags.split(',').map((tag, tagIndex) => {
+                          {(() => {
+                            // Handle tags as string or array
+                            let tags = [];
+                            if (typeof ref.tags === 'string') {
+                              tags = ref.tags.split(',').map(t => t.trim()).filter(t => t);
+                            } else if (Array.isArray(ref.tags)) {
+                              tags = ref.tags;
+                            }
+                            
+                            return tags.map((tag, tagIndex) => {
                               const trimmedTag = tag.trim();
-                              if (trimmedTag === 'x_refsource_MISC' || trimmedTag === 'MISC') {
+                              if (trimmedTag === 'x_refsource_MISC' || trimmedTag === 'MISC' || !trimmedTag) {
                                 return null;
                               }
                               return (
@@ -247,10 +255,8 @@ function CVERecommendationsPage() {
                                   {trimmedTag}
                                 </span>
                               );
-                            })
-                          ) : (
-                            <span style={{ color: '#606060' }}></span>
-                          )}
+                            });
+                          })()}
                         </td>
                       </tr>
                     ))}
