@@ -85,7 +85,7 @@ function ComponentsPage() {
         localStorage.removeItem('backgroundSyncTask');
         setBackgroundTask(null);
       }
-    }, 2000);
+    }, 5000);  // Increased from 2000ms to 5000ms to reduce log spam
   };
   const [showCVEsModal, setShowCVEsModal] = useState(false);
   const [selectedComponentCVEs, setSelectedComponentCVEs] = useState(null);
@@ -257,7 +257,7 @@ function ComponentsPage() {
           localStorage.removeItem('backgroundSyncTask');
           setBackgroundTask(null);
         }
-      }, 2000); // Poll every 2 seconds
+      }, 5000); // Poll every 5 seconds to reduce log spam
 
     } catch (err) {
       console.error(err);

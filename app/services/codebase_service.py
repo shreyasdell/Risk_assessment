@@ -101,16 +101,41 @@ class CodebaseAnalyzer:
         for file_path in dir_path.rglob('*'):
             if file_path.name in self.parsers:
                 detected_files.append(file_path.name)
+        
+        logger.info(f"[codebase_analyzer] Detected files: {', '.join(detected_files)}")
+        
+        # Prioritize lockfiles over package files
+        # If lockfile exists, skip the corresponding package file
+        lockfile_priority = {
+            'package-lock.json': 'package.json',
+            'yarn.lock': 'package.json',
+            'pnpm-lock.yaml': 'package.json',
+            'poetry.lock': 'pyproject.toml',
+            'Gemfile.lock': 'Gemfile',
+            'composer.lock': 'composer.json',
+            'go.sum': 'go.mod',
+        }
+        
+        files_to_skip = set()
+        for lockfile, package_file in lockfile_priority.items():
+            if lockfile in detected_files:
+                files_to_skip.add(package_file)
+                logger.info(f"[codebase_analyzer] Lockfile {lockfile} detected, skipping {package_file}")
+        
+        # Parse files (skipping package files if lockfile exists)
+        parsers_used = []
+        for file_path in dir_path.rglob('*'):
+            if file_path.name in self.parsers and file_path.name not in files_to_skip:
                 try:
                     file_components = self.parsers[file_path.name](file_path)
                     # Filter out components with empty names
                     valid_components = [c for c in file_components if c.get('name') and c['name'].strip()]
                     components.extend(valid_components)
+                    parsers_used.append(file_path.name)
                 except Exception as e:
                     logger.warning(f"Failed to parse {file_path}: {e}")
         
-        logger.info(f"[codebase_analyzer] Detected files: {', '.join(detected_files)}")
-        logger.info(f"[codebase_analyzer] Parsers used: {', '.join(set(detected_files))}")
+        logger.info(f"[codebase_analyzer] Parsers used: {', '.join(set(parsers_used))}")
         
         # Count by dependency type
         dependency_counts = {}

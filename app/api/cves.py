@@ -459,10 +459,10 @@ def get_cve_nvd_data(
         # Extract references
         references = []
         if "references" in nvd_data:
-            for ref_data in nvd_data["references"]:
-                for ref in ref_data.get("reference_data", []):
+            for ref_group in nvd_data["references"]:
+                source = ref_group.get("source", "")
+                for ref in ref_group.get("reference_data", []):
                     url = ref.get("url", "")
-                    source = ref_data.get("source", "")
                     tags = ref.get("tags", [])
                     
                     # Filter out MISC tags
@@ -478,13 +478,14 @@ def get_cve_nvd_data(
         cwes = []
         if "weaknesses" in nvd_data:
             for weakness in nvd_data["weaknesses"]:
+                source = weakness.get("source", "")
                 for desc in weakness.get("description", []):
                     cwe_id = desc.get("value", "")
                     if cwe_id.startswith("CWE-"):
                         cwes.append({
                             "cwe_id": cwe_id,
-                            "cwe_name": desc.get("description", ""),
-                            "source": weakness.get("source", "")
+                            "cwe_name": "",  # NVD doesn't provide CWE name in this field
+                            "source": source
                         })
         
         return {

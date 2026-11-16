@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import logging
+import sys
 from app.api import auth, vendors, applications, components, dashboard, cves, risk_scores, remediations, audit_logs, nist, search, reports, cache, normalize
 from app.agent.router import router as agent_router
 from app.middleware.rate_limit import rate_limit_middleware
@@ -11,37 +12,27 @@ from app.middleware.csrf import csrf_middleware
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Suppress uvicorn access logs for polling endpoints
+class PollingLogFilter(logging.Filter):
+    def __init__(self):
+        super().__init__()
+        self.polling_endpoints = ["/cves/tasks/", "/risk-scores/"]
+    
+    def filter(self, record):
+        # Check if the log message contains a polling endpoint
+        if any(ep in record.getMessage() for ep in self.polling_endpoints):
+            return False  # Don't log this message
+        return True
+
+# Apply the filter to uvicorn's access logger
+uvicorn_logger = logging.getLogger("uvicorn.access")
+uvicorn_logger.addFilter(PollingLogFilter())
+
 app = FastAPI(
     title="Third Party Risk Assessment Tool",
     description="API for managing third-party risk assessment with CVE intelligence integration",
     version="1.0.0"
 )
-
-# Polling endpoints to log at DEBUG level instead of INFO
-POLLING_ENDPOINTS = {
-    "/cves/tasks/",
-    "/risk-scores/",
-}
-
-@app.middleware("http")
-async def filter_polling_logs(request: Request, call_next):
-    """Middleware to reduce polling endpoint logs to DEBUG level."""
-    path = request.url.path
-    # Check if this is a polling endpoint
-    is_polling = any(path.startswith(ep) for ep in POLLING_ENDPOINTS)
-    
-    if is_polling:
-        # Temporarily set logger to DEBUG for this request
-        original_level = logger.level
-        logger.setLevel(logging.DEBUG)
-        try:
-            response = await call_next(request)
-        finally:
-            logger.setLevel(original_level)
-        return response
-    else:
-        response = await call_next(request)
-        return response
 
 app.add_middleware(
     CORSMiddleware,
