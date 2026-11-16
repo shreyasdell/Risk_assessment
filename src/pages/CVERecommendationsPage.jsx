@@ -22,17 +22,23 @@ function CVERecommendationsPage() {
       
       // Fetch NVD data
       const token = localStorage.getItem('token');
-      const nvdResponse = await fetch(`http://localhost:8000/api/cves/${id}/nvd-data`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      try {
+        const nvdResponse = await fetch(`http://localhost:8000/api/cves/${id}/nvd-data`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (nvdResponse.ok) {
+          const nvdJson = await nvdResponse.json();
+          console.log('NVD data fetched:', nvdJson);
+          setNvdData(nvdJson);
+        } else {
+          console.error('Failed to fetch NVD data:', nvdResponse.status, nvdResponse.statusText);
+          setNvdData({ references: [], cwes: [] }); // Set empty to trigger fallback
         }
-      });
-      if (nvdResponse.ok) {
-        const nvdJson = await nvdResponse.json();
-        console.log('NVD data fetched:', nvdJson);
-        setNvdData(nvdJson);
-      } else {
-        console.error('Failed to fetch NVD data:', nvdResponse.status, nvdResponse.statusText);
+      } catch (nvdErr) {
+        console.error('Error fetching NVD data:', nvdErr);
+        setNvdData({ references: [], cwes: [] }); // Set empty to trigger fallback
       }
     } catch (err) {
       console.error('Error loading CVE:', err);
@@ -155,7 +161,7 @@ function CVERecommendationsPage() {
       </div>
 
       {/* Section 2.5: NVD References */}
-      {(nvdData && nvdData.references && nvdData.references.length > 0) || (cve.references && cve.references.length > 0) ? (
+      {(nvdData && nvdData.references && nvdData.references.length > 0) || cve.references ? (
         <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>References to Advisories, Solutions and Tools</h2>
           <div style={{ fontSize: '14px', color: '#404040' }}>
@@ -207,7 +213,7 @@ function CVERecommendationsPage() {
                 </tbody>
               </table>
             ) : (
-              <div style={{ color: '#606060', fontStyle: 'italic' }}>
+              <div style={{ color: '#606060', whiteSpace: 'pre-wrap' }}>
                 {cve.references}
               </div>
             )}
