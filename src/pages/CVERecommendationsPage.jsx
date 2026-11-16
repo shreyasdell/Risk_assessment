@@ -23,7 +23,7 @@ function CVERecommendationsPage() {
       // Fetch NVD data
       const token = localStorage.getItem('token');
       try {
-        const nvdResponse = await fetch(`http://localhost:8000/api/cves/${id}/nvd-data`, {
+        const nvdResponse = await fetch(`http://localhost:8000/cves/${id}/nvd-data`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
