@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchComponents, fetchApplications, createComponent, updateComponent, deleteComponent, syncCVEs, syncAllCVEs, syncAllCVEsBackground, getTaskProgress, fetchLinkedCVEs, getRecentTasks } from '../api/client';
+import { fetchComponents, fetchApplications, createComponent, updateComponent, deleteComponent, syncCVEs, syncAllCVEs, fetchLinkedCVEs } from '../api/client';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,94 +10,6 @@ function ComponentsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingComponent, setEditingComponent] = useState(null);
   const [syncingCVEs, setSyncingCVEs] = useState({});
-  const [bulkSyncing, setBulkSyncing] = useState(false);
-  const [backgroundTask, setBackgroundTask] = useState(null);
-  const [syncingApplicationId, setSyncingApplicationId] = useState(null);
-
-  // Restore background task from localStorage on mount
-  useEffect(() => {
-    // Reset application filter on page load
-    setSelectedApplication('');
-    
-    const savedTask = localStorage.getItem('backgroundSyncTask');
-    if (savedTask) {
-      try {
-        const task = JSON.parse(savedTask);
-        if (task.status === 'running') {
-          setBackgroundTask(task);
-          setBulkSyncing(true);
-          setSyncingApplicationId(task.application_id || null);
-          // Resume polling
-          resumePolling(task.id);
-        }
-      } catch (err) {
-        console.error('Error parsing saved task:', err);
-        localStorage.removeItem('backgroundSyncTask');
-      }
-    }
-    // Also check database for running tasks
-    checkForRunningTask();
-  }, []);
-
-  const checkForRunningTask = async () => {
-    try {
-      const response = await getRecentTasks('cve_sync', 1);
-      const tasks = response.data || [];
-      
-      if (tasks.length > 0) {
-        const latestTask = tasks[0];
-        if (latestTask.status === 'running' || latestTask.status === 'paused') {
-          setBackgroundTask(latestTask);
-          setBulkSyncing(true);
-          setSyncingApplicationId(latestTask.application_id || null);
-          if (latestTask.status === 'running') {
-            resumePolling(latestTask.id);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error checking for running task:', err);
-    }
-  };
-
-  const resumePolling = (taskId) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const progress = await getTaskProgress(taskId);
-        const taskData = progress.data;
-        setBackgroundTask(taskData);
-        localStorage.setItem('backgroundSyncTask', JSON.stringify(taskData));
-
-        // Stop polling if task is paused, completed, or failed
-        if (taskData.status === 'paused' || taskData.status === 'completed' || taskData.status === 'failed') {
-          clearInterval(pollInterval);
-          if (taskData.status === 'paused') {
-            // Keep bulkSyncing true for paused tasks
-            console.log('Task paused, stopping polling');
-          } else {
-            setBulkSyncing(false);
-            setSyncingApplicationId(null);
-            localStorage.removeItem('backgroundSyncTask');
-
-            if (taskData.status === 'completed') {
-              alert(`Bulk sync completed: ${taskData.result.processed} succeeded, ${taskData.result.failed} failed`);
-            } else {
-              alert(`Bulk sync failed: ${taskData.error_message}`);
-            }
-
-            setBackgroundTask(null);
-          }
-        }
-      } catch (err) {
-        console.error('Error polling task progress:', err);
-        clearInterval(pollInterval);
-        setBulkSyncing(false);
-        setSyncingApplicationId(null);
-        localStorage.removeItem('backgroundSyncTask');
-        setBackgroundTask(null);
-      }
-    }, 5000);  // Increased from 2000ms to 5000ms to reduce log spam
-  };
   const [showCVEsModal, setShowCVEsModal] = useState(false);
   const [selectedComponentCVEs, setSelectedComponentCVEs] = useState(null);
   const [cveCurrentPage, setCveCurrentPage] = useState(1);
@@ -214,41 +126,6 @@ function ComponentsPage() {
     }
   };
 
-  const handlePauseTask = async (taskId) => {
-    try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:8000/api/cves/tasks/${taskId}/pause`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (backgroundTask) {
-        setBackgroundTask({ ...backgroundTask, status: 'paused' });
-      }
-    } catch (err) {
-      console.error('Error pausing task:', err);
-    }
-  };
-
-  const handleResumeTask = async (taskId) => {
-    try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:8000/api/cves/tasks/${taskId}/resume`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (backgroundTask) {
-        setBackgroundTask({ ...backgroundTask, status: 'running' });
-        resumePolling(taskId);
-      }
-    } catch (err) {
-      console.error('Error resuming task:', err);
-    }
-  };
-
   const handleBulkSyncCVEs = async () => {
     // Check if any components in the selected application are not enriched
     const componentsToCheck = selectedApplication 
@@ -262,59 +139,17 @@ function ComponentsPage() {
       return;
     }
     
-    if (!window.confirm(`Sync CVEs for all components${selectedApplication ? ' in this application' : ''}? This will run in the background.`)) {
+    if (!window.confirm(`Sync CVEs for all components${selectedApplication ? ' in this application' : ''}?`)) {
       return;
     }
     
-    // Track which application is syncing
-    setSyncingApplicationId(selectedApplication ? parseInt(selectedApplication) : null);
-    setBulkSyncing(true);
-    
     try {
-      const response = await syncAllCVEsBackground(selectedApplication || null);
-      const taskId = response.data.task_id;
-      const initialTask = { id: taskId, status: 'running', progress: 0, application_id: selectedApplication ? parseInt(selectedApplication) : null };
-      setBackgroundTask(initialTask);
-      localStorage.setItem('backgroundSyncTask', JSON.stringify(initialTask));
-
-      // Poll for progress
-      const pollInterval = setInterval(async () => {
-        try {
-          const progress = await getTaskProgress(taskId);
-          const taskData = progress.data;
-          setBackgroundTask(taskData);
-          localStorage.setItem('backgroundSyncTask', JSON.stringify(taskData));
-
-          if (taskData.status === 'completed' || taskData.status === 'failed') {
-            clearInterval(pollInterval);
-            setBulkSyncing(false);
-            setSyncingApplicationId(null);
-            localStorage.removeItem('backgroundSyncTask');
-
-            if (taskData.status === 'completed') {
-              alert(`Bulk sync completed: ${taskData.result.processed} succeeded, ${taskData.result.failed} failed`);
-              // Don't reload components to prevent re-ordering
-              // User can manually refresh if needed
-            } else {
-              alert(`Bulk sync failed: ${taskData.error_message}`);
-            }
-
-            setBackgroundTask(null);
-          }
-        } catch (err) {
-          console.error('Error polling task progress:', err);
-          clearInterval(pollInterval);
-          setBulkSyncing(false);
-          setSyncingApplicationId(null);
-          localStorage.removeItem('backgroundSyncTask');
-          setBackgroundTask(null);
-        }
-      }, 5000); // Poll every 5 seconds to reduce log spam
-
+      await syncAllCVEs(selectedApplication || null);
+      alert('CVEs synced');
+      loadComponents();
     } catch (err) {
       console.error(err);
-      alert('Failed to start bulk sync');
-      setBulkSyncing(false);
+      alert('Failed');
     }
   };
 
@@ -326,12 +161,7 @@ function ComponentsPage() {
     return componentsToCheck.some(c => !c.nvd_vendor || !c.nvd_product || !c.search_name || c.enrichment_confidence < 60);
   };
 
-  // Check if the current selected application is already syncing
-  const isCurrentAppSyncing = () => {
-    if (!bulkSyncing) return false;
-    const currentAppId = selectedApplication ? parseInt(selectedApplication) : null;
-    return syncingApplicationId === currentAppId;
-  };
+
   const handleViewCVEs = async (componentId) => { 
     setCveCurrentPage(1); // Reset to first page
     try { 
@@ -366,36 +196,21 @@ function ComponentsPage() {
           </select>
           {canWrite && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {isCurrentAppSyncing() && backgroundTask && (
-                <span
-                  onClick={() => backgroundTask.status === 'running' ? handlePauseTask(backgroundTask.id) : handleResumeTask(backgroundTask.id)}
-                  style={{
-                    fontSize: '12px',
-                    color: '#0076CE',
-                    cursor: 'pointer',
-                    textDecoration: 'underline'
-                  }}
-                >
-                  {backgroundTask.status === 'running' ? 'Pause' : 'Resume'}
-                </span>
-              )}
               <button
                 onClick={handleBulkSyncCVEs}
-                disabled={isCurrentAppSyncing() || hasUnenrichedComponents()}
+                disabled={hasUnenrichedComponents()}
                 style={{
-                  backgroundColor: (isCurrentAppSyncing() || hasUnenrichedComponents()) ? '#64748B' : '#107C10',
+                  backgroundColor: hasUnenrichedComponents() ? '#64748B' : '#107C10',
                   color: '#FFFFFF',
                   border: 'none',
                   padding: '8px 16px',
                   borderRadius: '4px',
                   fontSize: '14px',
                   fontWeight: 500,
-                  cursor: (isCurrentAppSyncing() || hasUnenrichedComponents()) ? 'not-allowed' : 'pointer'
+                  cursor: hasUnenrichedComponents() ? 'not-allowed' : 'pointer'
                 }}
               >
-                {isCurrentAppSyncing() && backgroundTask
-                  ? `Syncing ${selectedApplication ? 'Selected App' : 'All Apps'}... ${backgroundTask.progress_percentage || 0}%`
-                  : hasUnenrichedComponents()
+                {hasUnenrichedComponents()
                   ? 'Enriching...'
                   : `Sync CVEs ${selectedApplication ? '(Selected App)' : '(All Apps)'}`}
               </button>

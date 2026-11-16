@@ -14,7 +14,6 @@ from app.services.cve_service import (
     get_cves_for_component
 )
 from app.services.nvd_service import nvd_service
-from app.services.background_sync_service import background_sync_service
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
@@ -209,45 +208,6 @@ def sync_all_cves(
     return results
 
 
-@router.post("/tasks/{task_id}/pause", response_model=dict)
-def pause_sync_task(
-    task_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_write_access)
-):
-    """Pause a running sync task."""
-    success = background_sync_service.pause_task(db, task_id)
-    if not success:
-        raise HTTPException(status_code=400, detail="Task cannot be paused (not running or not found)")
-    return {"message": "Task paused", "task_id": task_id}
-
-
-@router.post("/tasks/{task_id}/resume", response_model=dict)
-def resume_sync_task(
-    task_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_write_access)
-):
-    """Resume a paused sync task."""
-    success = background_sync_service.resume_task(db, task_id)
-    if not success:
-        raise HTTPException(status_code=400, detail="Task cannot be resumed (not paused or not found)")
-    return {"message": "Task resumed", "task_id": task_id}
-
-
-@router.post("/tasks/{task_id}/cancel", response_model=dict)
-def cancel_sync_task(
-    task_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_write_access)
-):
-    """Cancel a running or paused sync task."""
-    success = background_sync_service.cancel_task(db, task_id)
-    if not success:
-        raise HTTPException(status_code=400, detail="Task cannot be cancelled (not running/paused or not found)")
-    return {"message": "Task cancelled", "task_id": task_id}
-
-
 @router.post("/link", summary="Link a CVE to a component")
 def link_cve_to_component(
     cve_id: int,
@@ -406,36 +366,6 @@ def bulk_link_cves(
     }
 
 
-@router.post("/sync-all-background", summary="Start bulk CVE sync in background")
-def sync_all_cves_background(
-    application_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_write_access)
-):
-    """
-    Start a bulk CVE sync operation in the background.
-
-    Returns immediately with a task ID. Use the /tasks/{task_id} endpoint
-    to poll for progress.
-
-    This is non-blocking and suitable for large SBOMs with 100+ components.
-    """
-    try:
-        task = background_sync_service.start_bulk_cve_sync(
-            db=db,
-            application_id=application_id,
-            username=current_user.username
-        )
-        return {
-            "message": "Bulk CVE sync started in background",
-            "task_id": task.id,
-            "total_components": task.total_items,
-            "status": task.status
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
 @router.get("/{cve_id}/nvd-data", summary="Get NVD data for CVE recommendations")
 def get_cve_nvd_data(
     cve_id: str,
@@ -511,58 +441,4 @@ def get_cve_nvd_data(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Failed to fetch NVD data: {str(e)}"
         )
-
-
-@router.get("/tasks/{task_id}", summary="Get background task progress")
-def get_task_progress(
-    task_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Get the current progress of a background sync task.
-
-    Poll this endpoint to show a progress bar in the UI.
-    """
-    task_status = background_sync_service.get_task_status(db, task_id)
-    if not task_status:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task_status
-
-
-@router.get("/tasks", summary="Get recent background tasks")
-def get_recent_tasks(
-    task_type: Optional[str] = Query(None),
-    limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Get recent background tasks for monitoring."""
-    return background_sync_service.get_recent_tasks(db, task_type=task_type, limit=limit)
-
-
-@router.post("/tasks/{task_id}/pause", summary="Pause a background task")
-def pause_task(
-    task_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Pause a running background sync task."""
-    success = background_sync_service.pause_task(db, task_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Task not found or cannot be paused")
-    return {"message": "Task paused", "task_id": task_id}
-
-
-@router.post("/tasks/{task_id}/resume", summary="Resume a paused task")
-def resume_task(
-    task_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Resume a paused background sync task."""
-    success = background_sync_service.resume_task(db, task_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Task not found or cannot be resumed")
-    return {"message": "Task resumed", "task_id": task_id}
 

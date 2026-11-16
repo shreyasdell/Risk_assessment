@@ -141,29 +141,6 @@ export const syncAllCVEs = (applicationId = null, forceRefresh = false) =>
     params: { application_id: applicationId, force_refresh: forceRefresh }
   });
 
-// Background sync with progress tracking
-export const syncAllCVEsBackground = (applicationId = null) =>
-  apiClient.post('/cves/sync-all-background', null, {
-    params: { application_id: applicationId }
-  });
-
-export const getTaskProgress = (taskId) =>
-  apiClient.get(`/cves/tasks/${taskId}`);
-
-export const getRecentTasks = (taskType = null, limit = 10) =>
-  apiClient.get('/cves/tasks', {
-    params: { task_type: taskType, limit }
-  });
-
-export const pauseSyncTask = (taskId) =>
-  apiClient.post(`/cves/tasks/${taskId}/pause`);
-
-export const resumeSyncTask = (taskId) =>
-  apiClient.post(`/cves/tasks/${taskId}/resume`);
-
-export const cancelSyncTask = (taskId) =>
-  apiClient.post(`/cves/tasks/${taskId}/cancel`);
-
 export const linkCVEToComponent = (cveId, componentId) =>
   apiClient.post('/cves/link', null, {
     params: { cve_id: cveId, component_id: componentId }
