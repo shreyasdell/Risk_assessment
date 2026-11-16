@@ -79,15 +79,11 @@ class PDFReportService:
             fontName='Helvetica-Bold'
         ))
         
-        # Normal text
-        self.styles.add(ParagraphStyle(
-            name='BodyText',
-            parent=self.styles['Normal'],
-            fontSize=10,
-            textColor=self.COLORS['text'],
-            spaceAfter=6,
-            leading=14
-        ))
+        # Update existing BodyText style
+        self.styles['BodyText'].fontSize = 10
+        self.styles['BodyText'].textColor = self.COLORS['text']
+        self.styles['BodyText'].spaceAfter = 6
+        self.styles['BodyText'].leading = 14
         
         # Small text for tables
         self.styles.add(ParagraphStyle(
