@@ -298,20 +298,42 @@ class CodebaseAnalyzer:
         dependencies = data.get('project', {}).get('dependencies', [])
         
         for dep in dependencies:
-            # Parse: package>=version
-            if '>=' in dep:
-                name, version = dep.split('>=', 1)
+            # Parse: package>=version, package==version, package~=version, etc.
+            import re
+            match = re.match(r'^([a-zA-Z0-9_-\.]+)([~><=!]*)([^#]+)?', dep)
+            if match:
+                name = match.group(1).strip()
+                operator = match.group(2).strip() if match.group(2) else ''
+                version = match.group(3).strip() if match.group(3) else ''
+                
+                # Clean up version
+                version = version.strip().rstrip(',;')
+                
+                # If no version specified, mark as latest
+                if not version:
+                    version = 'latest'
+                
+                components.append({
+                    'name': name,
+                    'version': version,
+                    'declared_version': f"{operator}{version}" if operator else version,
+                    'version_unresolved': True,  # pyproject.toml doesn't have exact versions
+                    'component_type': 'library',
+                    'purl': f'pkg:pypi/{name}@{version}',
+                    'ecosystem': 'pypi'
+                })
             else:
-                name = dep
-                version = 'latest'
-            
-            components.append({
-                'name': name.strip(),
-                'version': version.strip(),
-                'component_type': 'library',
-                'purl': f'pkg:pypi/{name.strip()}@{version.strip()}',
-                'ecosystem': 'pypi'
-            })
+                # Fallback: just package name
+                name = dep.strip()
+                components.append({
+                    'name': name,
+                    'version': 'latest',
+                    'declared_version': 'latest',
+                    'version_unresolved': True,
+                    'component_type': 'library',
+                    'purl': f'pkg:pypi/{name}@latest',
+                    'ecosystem': 'pypi'
+                })
         
         return components
 
@@ -363,9 +385,16 @@ class CodebaseAnalyzer:
             if group_id is not None and artifact_id is not None:
                 name = f"{group_id.text}:{artifact_id.text}"
                 version_text = version.text if version is not None else 'latest'
+                
+                # Clean version if it's a variable reference like ${project.version}
+                if version_text and version_text.startswith('${'):
+                    version_text = 'latest'  # Variable reference, mark as latest
+                
                 components.append({
                     'name': name,
                     'version': version_text,
+                    'declared_version': version.text if version is not None else 'latest',
+                    'version_unresolved': True,  # pom.xml doesn't have exact versions
                     'component_type': 'library',
                     'purl': f'pkg:maven/{group_id.text}/{artifact_id.text}@{version_text}',
                     'ecosystem': 'maven'
@@ -410,13 +439,24 @@ class CodebaseAnalyzer:
             for line in f:
                 line = line.strip()
                 if line.startswith('gem '):
+                    # Strip inline comments
+                    if '#' in line:
+                        line = line.split('#')[0].strip()
+                    
                     # Parse: gem 'package', 'version'
                     parts = line[4:].strip().split(',')
                     name = parts[0].strip().strip("'\"")
                     version = parts[1].strip().strip("'\"") if len(parts) > 1 else 'latest'
+                    
+                    # Only mark as latest if version is actually empty
+                    if not version or version == 'latest':
+                        version = 'latest'
+                    
                     components.append({
                         'name': name,
                         'version': version,
+                        'declared_version': version,
+                        'version_unresolved': True,  # Gemfile doesn't have exact versions
                         'component_type': 'library',
                         'purl': f'pkg:gem/{name}@{version}',
                         'ecosystem': 'rubygems'
