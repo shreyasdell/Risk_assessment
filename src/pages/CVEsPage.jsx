@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchCVEs, deleteCVE, fetchApplications, syncAllCVEsBackground, getTaskProgress, pauseSyncTask, resumeSyncTask, cancelSyncTask } from '../api/client';
+import { fetchCVEs, deleteCVE, fetchApplications, syncAllCVEs } from '../api/client';
 import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
@@ -13,34 +13,13 @@ function CVEsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [totalCVEs, setTotalCVEs] = useState(0);
-  const [syncTask, setSyncTask] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const { canDelete } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     loadApplications();
-    checkForRunningTask();
   }, []);
-
-  const checkForRunningTask = async () => {
-    try {
-      // Check localStorage for running task state
-      const savedTask = localStorage.getItem('cve_sync_task');
-      if (savedTask) {
-        const task = JSON.parse(savedTask);
-        if (task.status === 'running' || task.status === 'paused') {
-          setSyncTask(task);
-          setSyncing(true);
-          if (task.status === 'running') {
-            pollTaskProgress(task.id);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error checking for running task:', err);
-    }
-  };
 
   useEffect(() => {
     loadCVEs();
@@ -110,73 +89,13 @@ function CVEsPage() {
   const handleSync = async () => {
     try {
       setSyncing(true);
-      const response = await syncAllCVEsBackground(applicationFilter || null);
-      setSyncTask(response.data);
-      pollTaskProgress(response.data.id);
+      await syncAllCVEs(applicationFilter || null);
+      loadCVEs();
     } catch (err) {
       console.error('Error starting sync:', err);
       alert('Failed to start sync');
+    } finally {
       setSyncing(false);
-    }
-  };
-
-  const pollTaskProgress = (taskId) => {
-    const interval = setInterval(async () => {
-      try {
-        const response = await getTaskProgress(taskId);
-        const task = response.data;
-        setSyncTask(task);
-        
-        if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
-          clearInterval(interval);
-          setSyncing(false);
-          loadCVEs(); // Reload CVEs after sync completes
-        }
-      } catch (err) {
-        console.error('Error polling task:', err);
-        clearInterval(interval);
-        setSyncing(false);
-      }
-    }, 3000); // Poll every 3 seconds
-  };
-
-  const handlePause = async () => {
-    if (syncTask) {
-      try {
-        await pauseSyncTask(syncTask.id);
-        // Poll once to get updated status
-        const response = await getTaskProgress(syncTask.id);
-        setSyncTask(response.data);
-      } catch (err) {
-        console.error('Error pausing task:', err);
-        alert('Failed to pause task');
-      }
-    }
-  };
-
-  const handleResume = async () => {
-    if (syncTask) {
-      try {
-        await resumeSyncTask(syncTask.id);
-        // Resume polling
-        pollTaskProgress(syncTask.id);
-      } catch (err) {
-        console.error('Error resuming task:', err);
-        alert('Failed to resume task');
-      }
-    }
-  };
-
-  const handleCancel = async () => {
-    if (syncTask && window.confirm('Cancel this sync task?')) {
-      try {
-        await cancelSyncTask(syncTask.id);
-        setSyncTask({ ...syncTask, status: 'cancelled' });
-        setSyncing(false);
-      } catch (err) {
-        console.error('Error cancelling task:', err);
-        alert('Failed to cancel task');
-      }
     }
   };
 
@@ -242,20 +161,7 @@ function CVEsPage() {
           </select>
           <button onClick={handleGenerateReport} style={{ padding: '8px 16px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#107C10', color: '#FFFFFF', cursor: 'pointer' }}>Generate Report</button>
           {!syncing && <button onClick={handleSync} style={{ padding: '8px 16px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#0076CE', color: '#FFFFFF', cursor: 'pointer' }}>Sync CVEs</button>}
-          {syncing && syncTask && (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', color: '#606060' }}>
-                {syncTask.status === 'running' && `Syncing: ${syncTask.processed_items || 0}/${syncTask.total_items || 0} (${syncTask.progress_percentage || 0}%)`}
-                {syncTask.status === 'paused' && `Paused: ${syncTask.processed_items || 0}/${syncTask.total_items || 0} (${syncTask.progress_percentage || 0}%)`}
-                {syncTask.status === 'completed' && 'Completed'}
-                {syncTask.status === 'failed' && 'Failed'}
-                {syncTask.status === 'cancelled' && 'Cancelled'}
-              </span>
-              {syncTask.status === 'running' && <button onClick={handlePause} style={{ padding: '6px 12px', fontSize: '13px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#F4B400', color: '#FFFFFF', cursor: 'pointer' }}>Pause</button>}
-              {syncTask.status === 'paused' && <button onClick={handleResume} style={{ padding: '6px 12px', fontSize: '13px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#107C10', color: '#FFFFFF', cursor: 'pointer' }}>Resume</button>}
-              <button onClick={handleCancel} style={{ padding: '6px 12px', fontSize: '13px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#D13438', color: '#FFFFFF', cursor: 'pointer' }}>Cancel</button>
-            </div>
-          )}
+          {syncing && <span style={{ fontSize: '13px', color: '#606060' }}>Syncing...</span>}
         </div>
       </div>
 

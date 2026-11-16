@@ -23,7 +23,7 @@ def generate_pdf_report(
     application_id: Optional[int] = Query(None, description="Filter by application ID"),
     sbom_id: Optional[str] = Query(None, description="Filter by SBOM ID"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Generate a PDF vulnerability assessment report.
