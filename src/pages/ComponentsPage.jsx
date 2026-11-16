@@ -203,6 +203,41 @@ function ComponentsPage() {
     }
   };
 
+  const handlePauseTask = async (taskId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`http://localhost:8000/api/cves/tasks/${taskId}/pause`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (backgroundTask) {
+        setBackgroundTask({ ...backgroundTask, status: 'paused' });
+      }
+    } catch (err) {
+      console.error('Error pausing task:', err);
+    }
+  };
+
+  const handleResumeTask = async (taskId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`http://localhost:8000/api/cves/tasks/${taskId}/resume`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (backgroundTask) {
+        setBackgroundTask({ ...backgroundTask, status: 'running' });
+        resumePolling(taskId);
+      }
+    } catch (err) {
+      console.error('Error resuming task:', err);
+    }
+  };
+
   const handleBulkSyncCVEs = async () => {
     // Check if any components in the selected application are not enriched
     const componentsToCheck = selectedApplication 
@@ -306,28 +341,43 @@ function ComponentsPage() {
             ))}
           </select>
           {canWrite && (
-            <button
-              onClick={handleBulkSyncCVEs}
-              disabled={bulkSyncing || hasUnenrichedComponents()}
-              style={{
-                backgroundColor: (bulkSyncing || hasUnenrichedComponents()) ? '#64748B' : '#107C10',
-                color: '#FFFFFF',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '4px',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: (bulkSyncing || hasUnenrichedComponents()) ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {bulkSyncing && backgroundTask
-                ? `Syncing... ${backgroundTask.progress_percentage || 0}%`
-                : bulkSyncing
-                ? 'Starting...'
-                : hasUnenrichedComponents()
-                ? 'Enriching...'
-                : 'Sync All CVEs'}
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {bulkSyncing && backgroundTask && (
+                <span
+                  onClick={() => backgroundTask.status === 'running' ? handlePauseTask(backgroundTask.id) : handleResumeTask(backgroundTask.id)}
+                  style={{
+                    fontSize: '12px',
+                    color: '#0076CE',
+                    cursor: 'pointer',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  {backgroundTask.status === 'running' ? 'Pause' : 'Resume'}
+                </span>
+              )}
+              <button
+                onClick={handleBulkSyncCVEs}
+                disabled={bulkSyncing || hasUnenrichedComponents()}
+                style={{
+                  backgroundColor: (bulkSyncing || hasUnenrichedComponents()) ? '#64748B' : '#107C10',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: (bulkSyncing || hasUnenrichedComponents()) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {bulkSyncing && backgroundTask
+                  ? `Syncing ${selectedApplication ? 'Selected App' : 'All Apps'}... ${backgroundTask.progress_percentage || 0}%`
+                  : bulkSyncing
+                  ? 'Starting...'
+                  : hasUnenrichedComponents()
+                  ? 'Enriching...'
+                  : `Sync CVEs ${selectedApplication ? '(Selected App)' : '(All Apps)'}`}
+              </button>
+            </div>
           )}
           {canWrite && (
             <button onClick={handleCreate} style={{ backgroundColor: '#0076CE', color: '#FFFFFF', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Add Component</button>

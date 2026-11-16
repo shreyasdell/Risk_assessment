@@ -29,7 +29,10 @@ function CVERecommendationsPage() {
       });
       if (nvdResponse.ok) {
         const nvdJson = await nvdResponse.json();
+        console.log('NVD data fetched:', nvdJson);
         setNvdData(nvdJson);
+      } else {
+        console.error('Failed to fetch NVD data:', nvdResponse.status, nvdResponse.statusText);
       }
     } catch (err) {
       console.error('Error loading CVE:', err);
@@ -152,95 +155,140 @@ function CVERecommendationsPage() {
       </div>
 
       {/* Section 2.5: NVD References */}
-      {nvdData && nvdData.references && nvdData.references.length > 0 && (
+      {(nvdData && nvdData.references && nvdData.references.length > 0) || (cve.references && cve.references.length > 0) ? (
         <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>References to Advisories, Solutions and Tools</h2>
           <div style={{ fontSize: '14px', color: '#404040' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>URL</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Source</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Tags</th>
-                </tr>
-              </thead>
-              <tbody>
-                {nvdData.references.map((ref, index) => (
-                  <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
-                    <td style={{ padding: '12px 16px' }}>
-                      <a
-                        href={ref.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#0076CE', textDecoration: 'none', wordBreak: 'break-all' }}
-                      >
-                        {ref.url}
-                      </a>
-                    </td>
-                    <td style={{ padding: '12px 16px', color: '#606060' }}>{ref.source || '—'}</td>
-                    <td style={{ padding: '12px 16px' }}>
-                      {ref.tags && ref.tags.length > 0 ? (
-                        ref.tags.map((tag, tagIndex) => (
-                          <span key={tagIndex} style={{ 
-                            display: 'inline-block', 
-                            padding: '2px 8px', 
-                            borderRadius: '4px', 
-                            fontSize: '11px', 
-                            backgroundColor: '#E5F3FF', 
-                            color: '#0076CE',
-                            marginRight: '4px',
-                            marginBottom: '4px'
-                          }}>
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <span style={{ color: '#606060' }}></span>
-                      )}
-                    </td>
+            {nvdData && nvdData.references && nvdData.references.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>URL</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Source</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Tags</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {nvdData.references.map((ref, index) => (
+                    <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                      <td style={{ padding: '12px 16px' }}>
+                        <a
+                          href={ref.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#0076CE', textDecoration: 'none', wordBreak: 'break-all' }}
+                        >
+                          {ref.url}
+                        </a>
+                      </td>
+                      <td style={{ padding: '12px 16px', color: '#606060' }}>{ref.source || '—'}</td>
+                      <td style={{ padding: '12px 16px' }}>
+                        {ref.tags && ref.tags.length > 0 ? (
+                          ref.tags.map((tag, tagIndex) => (
+                            <span key={tagIndex} style={{ 
+                              display: 'inline-block', 
+                              padding: '2px 8px', 
+                              borderRadius: '4px', 
+                              fontSize: '11px', 
+                              backgroundColor: '#E5F3FF', 
+                              color: '#0076CE',
+                              marginRight: '4px',
+                              marginBottom: '4px'
+                            }}>
+                              {tag}
+                            </span>
+                          ))
+                        ) : (
+                          <span style={{ color: '#606060' }}></span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ color: '#606060', fontStyle: 'italic' }}>
+                {cve.references}
+              </div>
+            )}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Section 3: Weakness Information */}
-      {nvdData && nvdData.cwes && nvdData.cwes.length > 0 && (
+      {(nvdData && nvdData.cwes && nvdData.cwes.length > 0) || cve.cwe_id ? (
         <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>Weakness Enumeration</h2>
           <div style={{ fontSize: '14px', color: '#404040' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>CWE-ID</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>CWE Name</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {nvdData.cwes.map((cwe, index) => (
-                  <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
-                    <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>
-                      <a
-                        href={`https://cwe.mitre.org/data/definitions/${cwe.cwe_id.replace('CWE-', '')}.html`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#0076CE', textDecoration: 'none' }}
-                      >
-                        {cwe.cwe_id}
-                      </a>
-                    </td>
-                    <td style={{ padding: '12px 16px', color: '#606060' }}>{cwe.cwe_name || '—'}</td>
-                    <td style={{ padding: '12px 16px', color: '#606060' }}>{cwe.source || '—'}</td>
+            {nvdData && nvdData.cwes && nvdData.cwes.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>CWE-ID</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>CWE Name</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Source</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {nvdData.cwes.map((cwe, index) => (
+                    <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                      <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>
+                        <a
+                          href={`https://cwe.mitre.org/data/definitions/${cwe.cwe_id.replace('CWE-', '')}.html`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#0076CE', textDecoration: 'none' }}
+                        >
+                          {cwe.cwe_id}
+                        </a>
+                      </td>
+                      <td style={{ padding: '12px 16px', color: '#606060' }}>{cwe.cwe_name || '—'}</td>
+                      <td style={{ padding: '12px 16px', color: '#606060' }}>{cwe.source || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div>
+                {(() => {
+                  // Handle multiple CWEs (comma-separated or array)
+                  const cweIds = cve.cwe_id.includes(',') 
+                    ? cve.cwe_id.split(',').map(id => id.trim())
+                    : [cve.cwe_id];
+                  
+                  return (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
+                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>CWE ID</th>
+                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Link</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cweIds.map((cweId, index) => (
+                          <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                            <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{cweId}</td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <a
+                                href={`https://cwe.mitre.org/data/definitions/${cweId.replace('CWE-', '')}.html`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: '#0076CE', textDecoration: 'none' }}
+                              >
+                                View CWE Details →
+                              </a>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Section 4: AI Remediation Summary (Placeholder for future) */}
       <div style={{ backgroundColor: '#F5F5F5', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>

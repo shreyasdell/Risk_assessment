@@ -527,3 +527,29 @@ def get_recent_tasks(
     """Get recent background tasks for monitoring."""
     return background_sync_service.get_recent_tasks(db, task_type=task_type, limit=limit)
 
+
+@router.post("/tasks/{task_id}/pause", summary="Pause a background task")
+def pause_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Pause a running background sync task."""
+    success = background_sync_service.pause_task(db, task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found or cannot be paused")
+    return {"message": "Task paused", "task_id": task_id}
+
+
+@router.post("/tasks/{task_id}/resume", summary="Resume a paused task")
+def resume_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Resume a paused background sync task."""
+    success = background_sync_service.resume_task(db, task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found or cannot be resumed")
+    return {"message": "Task resumed", "task_id": task_id}
+
