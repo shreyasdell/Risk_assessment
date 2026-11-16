@@ -15,16 +15,6 @@ def require_admin(current_user: User = Depends(get_current_active_user)) -> User
     return current_user
 
 
-def require_admin_or_analyst(current_user: User = Depends(get_current_active_user)) -> User:
-    """Require admin or analyst role"""
-    if current_user.role.lower() not in ["admin", "analyst"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Analyst or admin access required"
-        )
-    return current_user
-
-
 def require_write_access(current_user: User = Depends(get_current_active_user)) -> User:
     """Require write access (admin or analyst)"""
     if current_user.role.lower() not in ["admin", "analyst"]:

@@ -130,7 +130,7 @@ def sync_cves_for_component(
     component_id: int,
     force_refresh: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Sync CVEs for a component from NVD API
@@ -157,7 +157,7 @@ def sync_all_cves(
     application_id: Optional[int] = Query(None),
     force_refresh: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Sync CVEs for all components (optionally filtered by application)
@@ -213,7 +213,7 @@ def sync_all_cves(
 def pause_sync_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """Pause a running sync task."""
     success = background_sync_service.pause_task(db, task_id)
@@ -226,7 +226,7 @@ def pause_sync_task(
 def resume_sync_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """Resume a paused sync task."""
     success = background_sync_service.resume_task(db, task_id)
@@ -239,7 +239,7 @@ def resume_sync_task(
 def cancel_sync_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """Cancel a running or paused sync task."""
     success = background_sync_service.cancel_task(db, task_id)
@@ -253,7 +253,7 @@ def link_cve_to_component(
     cve_id: int,
     component_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Manually link an existing CVE to a component.
@@ -303,7 +303,7 @@ def unlink_cve_from_component(
     cve_id: int,
     component_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """Remove link between a CVE and a component."""
     from app.models.component import Component
@@ -410,7 +410,7 @@ def bulk_link_cves(
 def sync_all_cves_background(
     application_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Start a bulk CVE sync operation in the background.

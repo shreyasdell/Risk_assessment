@@ -68,19 +68,25 @@ function ComponentsPage() {
         setBackgroundTask(taskData);
         localStorage.setItem('backgroundSyncTask', JSON.stringify(taskData));
 
-        if (taskData.status === 'completed' || taskData.status === 'failed') {
+        // Stop polling if task is paused, completed, or failed
+        if (taskData.status === 'paused' || taskData.status === 'completed' || taskData.status === 'failed') {
           clearInterval(pollInterval);
-          setBulkSyncing(false);
-          setSyncingApplicationId(null);
-          localStorage.removeItem('backgroundSyncTask');
-
-          if (taskData.status === 'completed') {
-            alert(`Bulk sync completed: ${taskData.result.processed} succeeded, ${taskData.result.failed} failed`);
+          if (taskData.status === 'paused') {
+            // Keep bulkSyncing true for paused tasks
+            console.log('Task paused, stopping polling');
           } else {
-            alert(`Bulk sync failed: ${taskData.error_message}`);
-          }
+            setBulkSyncing(false);
+            setSyncingApplicationId(null);
+            localStorage.removeItem('backgroundSyncTask');
 
-          setBackgroundTask(null);
+            if (taskData.status === 'completed') {
+              alert(`Bulk sync completed: ${taskData.result.processed} succeeded, ${taskData.result.failed} failed`);
+            } else {
+              alert(`Bulk sync failed: ${taskData.error_message}`);
+            }
+
+            setBackgroundTask(null);
+          }
         }
       } catch (err) {
         console.error('Error polling task progress:', err);
