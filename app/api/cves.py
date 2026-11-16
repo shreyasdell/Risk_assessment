@@ -436,6 +436,69 @@ def sync_all_cves_background(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/{cve_id}/nvd-data", summary="Get NVD data for CVE recommendations")
+def get_cve_nvd_data(
+    cve_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Fetch NVD data for a CVE to populate the recommendations page.
+
+    Returns references and CWE data from NVD NIST API.
+    """
+    try:
+        # Use NVD service to fetch CVE data
+        nvd_data = nvd_service._fetch_cve_from_nvd_sync(cve_id)
+        
+        if not nvd_data:
+            return {
+                "references": [],
+                "cwes": []
+            }
+        
+        # Extract references
+        references = []
+        if "references" in nvd_data:
+            for ref_data in nvd_data["references"]:
+                for ref in ref_data.get("reference_data", []):
+                    url = ref.get("url", "")
+                    source = ref_data.get("source", "")
+                    tags = ref.get("tags", [])
+                    
+                    # Filter out MISC tags
+                    filtered_tags = [tag for tag in tags if tag != "MISC" and not tag.startswith("x_refsource_MISC")]
+                    
+                    references.append({
+                        "url": url,
+                        "source": source,
+                        "tags": filtered_tags
+                    })
+        
+        # Extract CWEs
+        cwes = []
+        if "weaknesses" in nvd_data:
+            for weakness in nvd_data["weaknesses"]:
+                for desc in weakness.get("description", []):
+                    cwe_id = desc.get("value", "")
+                    if cwe_id.startswith("CWE-"):
+                        cwes.append({
+                            "cwe_id": cwe_id,
+                            "cwe_name": desc.get("description", ""),
+                            "source": weakness.get("source", "")
+                        })
+        
+        return {
+            "references": references,
+            "cwes": cwes
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to fetch NVD data: {str(e)}"
+        )
+
+
 @router.get("/tasks/{task_id}", summary="Get background task progress")
 def get_task_progress(
     task_id: int,

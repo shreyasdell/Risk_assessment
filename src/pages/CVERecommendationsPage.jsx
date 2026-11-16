@@ -7,6 +7,7 @@ function CVERecommendationsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [cve, setCve] = useState(null);
+  const [nvdData, setNvdData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -18,6 +19,18 @@ function CVERecommendationsPage() {
     try {
       const response = await fetchCVE(id);
       setCve(response.data);
+      
+      // Fetch NVD data
+      const token = localStorage.getItem('token');
+      const nvdResponse = await fetch(`http://localhost:8000/api/cves/${id}/nvd-data`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (nvdResponse.ok) {
+        const nvdJson = await nvdResponse.json();
+        setNvdData(nvdJson);
+      }
     } catch (err) {
       console.error('Error loading CVE:', err);
       setError('Failed to load CVE details');
@@ -139,146 +152,92 @@ function CVERecommendationsPage() {
       </div>
 
       {/* Section 2.5: NVD References */}
-      {cve.references && (
+      {nvdData && nvdData.references && nvdData.references.length > 0 && (
         <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>References to Advisories, Solutions and Tools</h2>
           <div style={{ fontSize: '14px', color: '#404040' }}>
-            {(() => {
-              // Parse references from text field
-              let references = [];
-              try {
-                // Try parsing as JSON first
-                if (cve.references.startsWith('[') || cve.references.startsWith('{')) {
-                  references = JSON.parse(cve.references);
-                } else if (cve.references.includes(',')) {
-                  // Handle comma-separated URLs (legacy format)
-                  const urls = cve.references.split(',').map(url => url.trim()).filter(url => url);
-                  references = urls.map(url => ({
-                    url: url,
-                    source: 'CVE',
-                    tags: ''
-                  }));
-                } else {
-                  // Parse as newline-separated format: URL|Source|Tags
-                  references = cve.references.split('\n').map(line => {
-                    const parts = line.split('|');
-                    return {
-                      url: parts[0]?.trim(),
-                      source: parts[1]?.trim(),
-                      tags: parts[2]?.trim() || ''
-                    };
-                  }).filter(ref => ref.url);
-                }
-              } catch (e) {
-                console.error('Error parsing references:', e);
-                // Fallback: treat as comma-separated URLs
-                const urls = cve.references.split(',').map(url => url.trim()).filter(url => url);
-                references = urls.map(url => ({
-                  url: url,
-                  source: 'CVE',
-                  tags: ''
-                }));
-              }
-
-              if (references.length === 0) {
-                return <p style={{ color: '#606060', fontStyle: 'italic' }}>No references available</p>;
-              }
-
-              return (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>URL</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Source</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Tags</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {references.map((ref, index) => (
-                      <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
-                        <td style={{ padding: '12px 16px' }}>
-                          <a
-                            href={ref.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: '#0076CE', textDecoration: 'none', wordBreak: 'break-all' }}
-                          >
-                            {ref.url}
-                          </a>
-                        </td>
-                        <td style={{ padding: '12px 16px', color: '#606060' }}>{ref.source || '—'}</td>
-                        <td style={{ padding: '12px 16px' }}>
-                          {ref.tags && ref.tags.split(',').map((tag, tagIndex) => {
-                            const trimmedTag = tag.trim();
-                            // Filter out MISC tags
-                            if (trimmedTag === 'x_refsource_MISC' || trimmedTag === 'MISC') {
-                              return null;
-                            }
-                            return (
-                              <span key={tagIndex} style={{ 
-                                display: 'inline-block', 
-                                padding: '2px 8px', 
-                                borderRadius: '4px', 
-                                fontSize: '11px', 
-                                backgroundColor: '#E5F3FF', 
-                                color: '#0076CE',
-                                marginRight: '4px',
-                                marginBottom: '4px'
-                              }}>
-                                {trimmedTag}
-                              </span>
-                            );
-                          })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              );
-            })()}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>URL</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Source</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Tags</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nvdData.references.map((ref, index) => (
+                  <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                    <td style={{ padding: '12px 16px' }}>
+                      <a
+                        href={ref.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#0076CE', textDecoration: 'none', wordBreak: 'break-all' }}
+                      >
+                        {ref.url}
+                      </a>
+                    </td>
+                    <td style={{ padding: '12px 16px', color: '#606060' }}>{ref.source || '—'}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {ref.tags && ref.tags.length > 0 ? (
+                        ref.tags.map((tag, tagIndex) => (
+                          <span key={tagIndex} style={{ 
+                            display: 'inline-block', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '11px', 
+                            backgroundColor: '#E5F3FF', 
+                            color: '#0076CE',
+                            marginRight: '4px',
+                            marginBottom: '4px'
+                          }}>
+                            {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span style={{ color: '#606060' }}></span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
       {/* Section 3: Weakness Information */}
-      {cve.cwe_id && (
+      {nvdData && nvdData.cwes && nvdData.cwes.length > 0 && (
         <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>Weakness Information</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>Weakness Enumeration</h2>
           <div style={{ fontSize: '14px', color: '#404040' }}>
-            {(() => {
-              // Handle multiple CWEs (comma-separated or array)
-              const cweIds = cve.cwe_id.includes(',') 
-                ? cve.cwe_id.split(',').map(id => id.trim())
-                : [cve.cwe_id];
-              
-              return (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>CWE ID</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Link</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cweIds.map((cweId, index) => (
-                      <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
-                        <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>{cweId}</td>
-                        <td style={{ padding: '12px 16px' }}>
-                          <a
-                            href={`https://cwe.mitre.org/data/definitions/${cweId.replace('CWE-', '')}.html`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: '#0076CE', textDecoration: 'none' }}
-                          >
-                            View CWE Details →
-                          </a>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              );
-            })()}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #D9D9D9' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>CWE-ID</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>CWE Name</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#606060' }}>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nvdData.cwes.map((cwe, index) => (
+                  <tr key={index} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                    <td style={{ padding: '12px 16px', color: '#202020', fontWeight: 500 }}>
+                      <a
+                        href={`https://cwe.mitre.org/data/definitions/${cwe.cwe_id.replace('CWE-', '')}.html`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#0076CE', textDecoration: 'none' }}
+                      >
+                        {cwe.cwe_id}
+                      </a>
+                    </td>
+                    <td style={{ padding: '12px 16px', color: '#606060' }}>{cwe.cwe_name || '—'}</td>
+                    <td style={{ padding: '12px 16px', color: '#606060' }}>{cwe.source || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

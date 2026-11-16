@@ -1,6 +1,6 @@
 """Add dependency_type and declared_version to components
 
-Revision ID: 011
+Revision ID: 011_dep_type
 Revises: 010_add_canonical_identity_layer
 Create Date: 2025-01-13
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '011_add_dependency_type_and_declared_version'
+revision = '011_dep_type'
 down_revision = '010_add_canonical_identity_layer'
 branch_labels = None
 depends_on = None
