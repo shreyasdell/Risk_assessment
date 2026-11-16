@@ -7,7 +7,6 @@ function CVERecommendationsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [cve, setCve] = useState(null);
-  const [nvdData, setNvdData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -19,27 +18,8 @@ function CVERecommendationsPage() {
     try {
       const response = await fetchCVE(id);
       setCve(response.data);
-      
-      // Fetch NVD data
-      const token = localStorage.getItem('token');
-      try {
-        const nvdResponse = await fetch(`http://localhost:8000/cves/${id}/nvd-data`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (nvdResponse.ok) {
-          const nvdJson = await nvdResponse.json();
-          console.log('NVD data fetched:', nvdJson);
-          setNvdData(nvdJson);
-        } else {
-          console.error('Failed to fetch NVD data:', nvdResponse.status, nvdResponse.statusText);
-          setNvdData({ references: [], cwes: [] }); // Set empty to trigger fallback
-        }
-      } catch (nvdErr) {
-        console.error('Error fetching NVD data:', nvdErr);
-        setNvdData({ references: [], cwes: [] }); // Set empty to trigger fallback
-      }
+      // Don't fetch NVD data - use database data instead
+      // NVD API is unreliable (503 errors)
     } catch (err) {
       console.error('Error loading CVE:', err);
       setError('Failed to load CVE details');
