@@ -20,13 +20,16 @@ class PollingLogFilter(logging.Filter):
     
     def filter(self, record):
         # Check if the log message contains a polling endpoint
-        if any(ep in record.getMessage() for ep in self.polling_endpoints):
+        message = record.getMessage()
+        if any(ep in message for ep in self.polling_endpoints):
             return False  # Don't log this message
         return True
 
 # Apply the filter to uvicorn's access logger
 uvicorn_logger = logging.getLogger("uvicorn.access")
 uvicorn_logger.addFilter(PollingLogFilter())
+# Set uvicorn access logger to WARNING level to suppress INFO logs
+uvicorn_logger.setLevel(logging.WARNING)
 
 app = FastAPI(
     title="Third Party Risk Assessment Tool",

@@ -446,15 +446,23 @@ def get_cve_nvd_data(
 
     Returns references and CWE data from NVD NIST API.
     """
+    print(f"[NVD API] Fetching NVD data for {cve_id}")
     try:
         # Use NVD service to fetch CVE data
         nvd_data = nvd_service._fetch_cve_from_nvd_sync(cve_id)
         
+        print(f"[NVD API] NVD data returned: {nvd_data is not None}")
+        
         if not nvd_data:
+            print(f"[NVD API] No NVD data returned for {cve_id}")
             return {
                 "references": [],
                 "cwes": []
             }
+        
+        print(f"[NVD API] NVD data keys: {nvd_data.keys()}")
+        print(f"[NVD API] Has references: {'references' in nvd_data}")
+        print(f"[NVD API] Has weaknesses: {'weaknesses' in nvd_data}")
         
         # Extract references
         references = []
@@ -474,6 +482,8 @@ def get_cve_nvd_data(
                         "tags": filtered_tags
                     })
         
+        print(f"[NVD API] Extracted {len(references)} references")
+        
         # Extract CWEs
         cwes = []
         if "weaknesses" in nvd_data:
@@ -488,12 +498,15 @@ def get_cve_nvd_data(
                             "source": source
                         })
         
+        print(f"[NVD API] Extracted {len(cwes)} CWEs")
+        
         return {
             "references": references,
             "cwes": cwes
         }
         
     except Exception as e:
+        print(f"[NVD API] Error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Failed to fetch NVD data: {str(e)}"

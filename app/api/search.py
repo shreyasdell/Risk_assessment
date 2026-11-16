@@ -98,8 +98,8 @@ def global_search(
         {
             "id": a.id,
             "name": a.name,
-            "criticality": a.criticality.value if a.criticality else None,
-            "environment": a.environment.value if a.environment else None,
+            "criticality": a.criticality if a.criticality else None,
+            "environment": a.environment if a.environment else None,
             "type": "application",
         }
         for a in applications

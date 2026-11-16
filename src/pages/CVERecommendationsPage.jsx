@@ -161,7 +161,7 @@ function CVERecommendationsPage() {
       </div>
 
       {/* Section 2.5: NVD References */}
-      {(nvdData && nvdData.references && nvdData.references.length > 0) || cve.references ? (
+      {cve.references ? (
         <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9D9D9', borderRadius: '8px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#202020', marginBottom: '12px' }}>References to Advisories, Solutions and Tools</h2>
           <div style={{ fontSize: '14px', color: '#404040' }}>
