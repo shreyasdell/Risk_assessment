@@ -1,64 +1,73 @@
 """
-Report Generation API Router
+Reports API Router
+
+Provides endpoints for generating PDF reports.
 """
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional
-import io
 
 from app.core.database import get_db
-from app.auth.dependencies import get_current_user
-from app.services.report_service import report_service
+from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_write_access
+from app.models.user import User
+from app.services.pdf_report_service import pdf_report_service
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
-@router.get(
-    "/executive-pdf",
-    summary="Generate executive PDF report"
-)
-def generate_executive_report(
-    application_id: Optional[int] = Query(
-        None, description="Filter to specific application"
-    ),
-    vendor_id: Optional[int] = Query(
-        None, description="Filter to specific vendor"
-    ),
+@router.get("/generate-pdf", summary="Generate PDF vulnerability assessment report")
+def generate_pdf_report(
+    application_id: Optional[int] = Query(None, description="Filter by application ID"),
+    sbom_id: Optional[str] = Query(None, description="Filter by SBOM ID"),
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """
-    Generate a comprehensive PDF risk assessment report.
-
-    The report includes:
-    - Executive summary
-    - Risk scores per application
-    - Vulnerability findings
-    - Remediation recommendations
-    - Risk matrix
-
-    Optionally filter by application or vendor.
+    Generate a PDF vulnerability assessment report.
+    
+    Query Parameters:
+    - application_id: Optional application ID to filter components
+    - sbom_id: Optional SBOM ID to filter components
+    
+    Returns:
+    - PDF file as binary response
     """
-    pdf_bytes = report_service.generate_executive_report(
-        db=db,
-        application_id=application_id,
-        vendor_id=vendor_id,
-    )
-
-    filename = "risk_assessment_report"
-    if application_id:
-        filename += f"_app_{application_id}"
-    if vendor_id:
-        filename += f"_vendor_{vendor_id}"
-    filename += ".pdf"
-
-    return StreamingResponse(
-        io.BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition":
-                f'attachment; filename="{filename}"'
-        }
-    )
+    try:
+        # Generate PDF
+        pdf_buffer = pdf_report_service.generate_report(
+            db=db,
+            application_id=application_id,
+            sbom_id=sbom_id
+        )
+        
+        # Generate filename
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        app_name = ""
+        if application_id:
+            from app.models.application import Application
+            app = db.query(Application).filter(Application.id == application_id).first()
+            if app:
+                app_name = f"_{app.name.replace(' ', '_')}"
+        
+        filename = f"vulnerability_report{app_name}_{timestamp}.pdf"
+        
+        # Return PDF as response
+        return Response(
+            content=pdf_buffer.getvalue(),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDF report: {str(e)}"
+        )

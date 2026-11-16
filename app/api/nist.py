@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_write_access
 from app.models.user import User
 from app.models.nist_recommendation import NistRecommendation
 from app.services.nist_service import nist_service
@@ -30,7 +31,7 @@ router = APIRouter(prefix="/nist", tags=["NIST Recommendations"])
 def create_recommendation(
     rec: NistRecommendationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """Create a new NIST recommendation."""
     # Check if already exists

@@ -180,6 +180,43 @@ function CVEsPage() {
     }
   };
 
+  const handleGenerateReport = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const url = new URL('http://localhost:8000/api/reports/generate-pdf');
+      
+      if (applicationFilter) {
+        url.searchParams.append('application_id', applicationFilter);
+      }
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate report');
+      }
+      
+      // Download the PDF
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `vulnerability_report_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+      
+      alert('Report generated successfully!');
+    } catch (err) {
+      console.error('Error generating report:', err);
+      alert('Failed to generate report');
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -203,6 +240,7 @@ function CVEsPage() {
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
+          <button onClick={handleGenerateReport} style={{ padding: '8px 16px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#107C10', color: '#FFFFFF', cursor: 'pointer' }}>Generate Report</button>
           {!syncing && <button onClick={handleSync} style={{ padding: '8px 16px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#0076CE', color: '#FFFFFF', cursor: 'pointer' }}>Sync CVEs</button>}
           {syncing && syncTask && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
