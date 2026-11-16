@@ -183,7 +183,7 @@ function CVEsPage() {
   const handleGenerateReport = async () => {
     try {
       const token = localStorage.getItem('token');
-      const url = new URL('http://localhost:8000/api/reports/generate-pdf');
+      const url = new URL('http://localhost:8000/reports/generate-pdf');
       
       if (applicationFilter) {
         url.searchParams.append('application_id', applicationFilter);

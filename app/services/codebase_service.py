@@ -157,28 +157,35 @@ class CodebaseAnalyzer:
         # Parse production dependencies
         dependencies = data.get('dependencies', {})
         for name, version in dependencies.items():
+            # Clean version string - remove operators (^~>=<) and any comments
+            # JSON doesn't support inline comments, so just remove operators
+            clean_version = version.lstrip('^~>=<')
+            
             components.append({
                 'name': name,
-                'version': version.lstrip('^~>=<'),
+                'version': clean_version,
                 'declared_version': version,  # Store original range
                 'dependency_type': 'production',
                 'version_unresolved': True,  # No lockfile, version is unresolved
                 'component_type': 'library',
-                'purl': f'pkg:npm/{name}@{version.lstrip("^~>=<")}',
+                'purl': f'pkg:npm/{name}@{clean_version}',
                 'ecosystem': 'npm'
             })
         
         # Parse dev dependencies
         devDependencies = data.get('devDependencies', {})
         for name, version in devDependencies.items():
+            # Clean version string - remove operators (^~>=<)
+            clean_version = version.lstrip('^~>=<')
+            
             components.append({
                 'name': name,
-                'version': version.lstrip('^~>=<'),
+                'version': clean_version,
                 'declared_version': version,  # Store original range
                 'dependency_type': 'development',
                 'version_unresolved': True,  # No lockfile, version is unresolved
                 'component_type': 'library',
-                'purl': f'pkg:npm/{name}@{version.lstrip("^~>=<")}',
+                'purl': f'pkg:npm/{name}@{clean_version}',
                 'ecosystem': 'npm'
             })
         
@@ -240,19 +247,39 @@ class CodebaseAnalyzer:
                 if not line or line.startswith('#'):
                     continue
                 
-                # Parse: package==version or package>=version
-                parts = line.split('==')[0].split('>=')[0].split('<=')[0].split('~=')[0]
-                name = parts.strip()
-                version = line.split('==')[-1].split('>=')[-1].split('<=')[-1].split('~=')[-1].strip()
+                # Strip inline comments (everything after #)
+                if '#' in line:
+                    line = line.split('#')[0].strip()
                 
-                if name:
-                    components.append({
-                        'name': name,
-                        'version': version if version != name else 'latest',
-                        'component_type': 'library',
-                        'purl': f'pkg:pypi/{name}@{version if version != name else "latest"}',
-                        'ecosystem': 'pypi'
-                    })
+                if not line:
+                    continue
+                
+                # Parse: package==version, package>=version, package<=version, package~=version, or just package
+                import re
+                # Match package name and version specifier
+                match = re.match(r'^([a-zA-Z0-9_-\.]+)([~><=!]*)([^#]+)?', line)
+                if match:
+                    name = match.group(1).strip()
+                    operator = match.group(2).strip() if match.group(2) else ''
+                    version = match.group(3).strip() if match.group(3) else ''
+                    
+                    # Clean up version (remove whitespace, commas, etc.)
+                    version = version.strip().rstrip(',;')
+                    
+                    # If no version specified, mark as latest
+                    if not version:
+                        version = 'latest'
+                    
+                    if name:
+                        components.append({
+                            'name': name,
+                            'version': version,
+                            'declared_version': f"{operator}{version}" if operator else version,
+                            'version_unresolved': True,  # requirements.txt doesn't have exact versions
+                            'component_type': 'library',
+                            'purl': f'pkg:pypi/{name}@{version}',
+                            'ecosystem': 'pypi'
+                        })
         
         return components
 
