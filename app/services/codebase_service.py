@@ -257,7 +257,8 @@ class CodebaseAnalyzer:
                 # Parse: package==version, package>=version, package<=version, package~=version, or just package
                 import re
                 # Match package name and version specifier
-                match = re.match(r'^([a-zA-Z0-9_-\.]+)([~><=!]*)([^#]+)?', line)
+                # Package names can contain letters, numbers, underscores, hyphens, and dots
+                match = re.match(r'^([a-zA-Z0-9_\-.]+)([~><=!]*)([^#]+)?', line)
                 if match:
                     name = match.group(1).strip()
                     operator = match.group(2).strip() if match.group(2) else ''

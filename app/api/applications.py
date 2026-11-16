@@ -115,6 +115,7 @@ def upload_codebase(
     components_extracted = 0
     components_created = 0
     components_skipped = 0
+    component_ids = []  # Initialize before try block
     
     try:
         components_data = codebase_analyzer.analyze_zip(str(file_path))
