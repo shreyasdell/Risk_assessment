@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_write_access
 from app.models.user import User
 
 router = APIRouter(prefix="/cache", tags=["Cache Management"])
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/cache", tags=["Cache Management"])
 @router.get("/stats", summary="Get cache statistics")
 def get_cache_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Show how effective the cache is.
@@ -34,7 +35,7 @@ def get_cache_stats(
 )
 def clear_expired_cache(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_write_access)
 ):
     """Force re-fetch of expired CVE.org data on next sync."""
     from app.services.cve_cache_service import CVECacheService

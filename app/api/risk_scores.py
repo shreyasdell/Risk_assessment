@@ -8,6 +8,7 @@ from app.services.risk_service import (
     calculate_risk_scores_for_all_applications
 )
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_write_access
 from app.models.user import User
 from app.models.risk_score import RiskScore
 
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/risk-scores", tags=["Risk Scores"])
 def calculate_risk_score_endpoint(
     application_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Calculate risk score for a specific application
@@ -42,7 +43,7 @@ def calculate_risk_score_endpoint(
 @router.post("/calculate-all", response_model=List[RiskScoreResponse])
 def calculate_all_risk_scores(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Calculate risk scores for all applications

@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.models.component import Component
 from app.models.user import User
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_write_access
 from app.agent.normalizer.normalizer import component_normalizer
 
 router = APIRouter(prefix="/normalize", tags=["Normalization"])
@@ -55,7 +56,7 @@ def get_normalization(
 @router.post("/bulk", summary="Normalize all unnormalized components")
 def normalize_bulk(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Normalize all components that don't have normalization data yet.
@@ -107,7 +108,7 @@ def normalize_bulk(
 def reprocess_component(
     component_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Force re-normalization of a component by clearing cached data and re-running.
