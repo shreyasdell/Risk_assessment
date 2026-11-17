@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
@@ -17,6 +17,8 @@ from app.services.nvd_service import nvd_service
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
+from app.models.sync_job import SyncJob
+from datetime import datetime
 
 router = APIRouter(prefix="/cves", tags=["CVEs"])
 
@@ -156,13 +158,14 @@ def sync_all_cves(
     application_id: Optional[int] = Query(None),
     force_refresh: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_write_access)
+    current_user: User = Depends(require_write_access),
+    background_tasks: BackgroundTasks = Depends()
 ):
     """
-    Sync CVEs for all components (optionally filtered by application)
+    Sync CVEs for all components (optionally filtered by application).
+    Returns job_id immediately for progress tracking.
     """
     from app.models.component import Component
-    from app.services.component_service import get_components
     
     # Get components to sync
     query = db.query(Component)
@@ -174,38 +177,63 @@ def sync_all_cves(
     if not components:
         return {"message": "No components found to sync", "total": 0, "processed": 0}
     
-    results = {
-        "total": len(components),
-        "processed": 0,
-        "failed": 0,
-        "details": []
-    }
+    # Create sync job
+    job = SyncJob(
+        application_id=application_id,
+        status='running',
+        total_components=len(components),
+        processed_components=0,
+        total_verified_cves=0,
+        started_at=datetime.utcnow()
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
     
-    for component in components:
+    # Run sync in background
+    def run_sync():
+        from app.core.database import SessionLocal
+        db_sync = SessionLocal()
         try:
-            print(f"[BULK SYNC] Processing component {component.id}: {component.name} {component.version}")
-            cves = nvd_service.sync_component_cves(db, component)
-            results["processed"] += 1
-            results["details"].append({
-                "component_id": component.id,
-                "name": component.name,
-                "version": component.version,
-                "cves_found": len(cves),
-                "status": "success"
-            })
-            print(f"[BULK SYNC] Completed component {component.id}: {len(cves)} CVEs")
+            for i, component in enumerate(components):
+                try:
+                    # Update job progress
+                    job.current_component = f"{component.name} {component.version}"
+                    job.processed_components = i + 1
+                    cves = nvd_service.sync_component_cves(db_sync, component)
+                    job.total_verified_cves += len(cves)
+                    db_sync.commit()
+                    print(f"[BULK SYNC] {i+1}/{len(components)}: {component.name} {component.version} - {len(cves)} CVEs")
+                except Exception as e:
+                    print(f"[BULK SYNC] Failed {component.name} {component.version}: {str(e)}")
+            
+            # Mark job as completed
+            job.status = 'completed'
+            job.completed_at = datetime.utcnow()
+            db_sync.commit()
         except Exception as e:
-            results["failed"] += 1
-            results["details"].append({
-                "component_id": component.id,
-                "name": component.name,
-                "version": component.version,
-                "status": "failed",
-                "error": str(e)
-            })
-            print(f"[BULK SYNC] Failed component {component.id}: {str(e)}")
+            job.status = 'failed'
+            job.completed_at = datetime.utcnow()
+            db_sync.commit()
+        finally:
+            db_sync.close()
     
-    return results
+    background_tasks.add_task(run_sync)
+    
+    return {"job_id": job.id, "total_components": len(components)}
+
+
+@router.get("/sync-jobs/{job_id}", summary="Get sync job progress")
+def get_sync_job_progress(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get the current progress of a sync job."""
+    job = db.query(SyncJob).filter(SyncJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job.to_dict()
 
 
 @router.post("/link", summary="Link a CVE to a component")

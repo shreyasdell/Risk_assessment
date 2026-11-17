@@ -14,6 +14,7 @@ function CVEsPage() {
   const [pageSize, setPageSize] = useState(50);
   const [totalCVEs, setTotalCVEs] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [syncJob, setSyncJob] = useState(null);
   const [reportType, setReportType] = useState('full');
   const { canDelete } = useAuth();
   const navigate = useNavigate();
@@ -90,14 +91,52 @@ function CVEsPage() {
   const handleSync = async () => {
     try {
       setSyncing(true);
-      await syncAllCVEs(applicationFilter || null);
-      loadCVEs();
+      const response = await syncAllCVEs(applicationFilter || null);
+      const jobId = response.data.job_id;
+      setSyncJob({ id: jobId, status: 'running' });
+      
+      // Poll for progress
+      pollSyncProgress(jobId);
     } catch (err) {
       console.error('Error starting sync:', err);
       alert('Failed to start sync');
-    } finally {
       setSyncing(false);
     }
+  };
+
+  const pollSyncProgress = (jobId) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(`http://localhost:8000/cves/sync-jobs/${jobId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const jobData = await response.json();
+          setSyncJob(jobData);
+          
+          // Stop polling if job is completed or failed
+          if (jobData.status === 'completed' || jobData.status === 'failed') {
+            clearInterval(pollInterval);
+            setSyncing(false);
+            loadCVEs(); // Reload CVEs after sync completes
+            
+            if (jobData.status === 'completed') {
+              alert(`Sync completed: ${jobData.processed_components} components, ${jobData.verified_cves} CVEs found`);
+            } else {
+              alert('Sync failed');
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error polling sync progress:', err);
+        clearInterval(pollInterval);
+        setSyncing(false);
+      }
+    }, 5000); // Poll every 5 seconds
   };
 
   const handleGenerateReport = async () => {
@@ -167,7 +206,20 @@ function CVEsPage() {
           </select>
           <button onClick={handleGenerateReport} style={{ padding: '8px 16px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#107C10', color: '#FFFFFF', cursor: 'pointer' }}>Generate Report</button>
           {!syncing && <button onClick={handleSync} style={{ padding: '8px 16px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#0076CE', color: '#FFFFFF', cursor: 'pointer' }}>Sync CVEs</button>}
-          {syncing && <span style={{ fontSize: '13px', color: '#606060' }}>Syncing...</span>}
+          {syncing && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', color: '#606060' }}>
+                  {syncJob ? `${syncJob.processed_components} / ${syncJob.total_components} (${syncJob.percentage_complete}%)` : 'Syncing...'}
+                </span>
+              </div>
+              {syncJob && syncJob.current_component && (
+                <span style={{ fontSize: '12px', color: '#909090' }}>
+                  Current: {syncJob.current_component}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
