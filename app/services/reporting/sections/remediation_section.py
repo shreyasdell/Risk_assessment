@@ -1,31 +1,32 @@
 """
 Remediation Recommendations Section
 
-Generates prioritized remediation recommendations for each component.
+Generates prioritized remediation recommendations for each component with improved formatting.
 """
 
 from typing import List
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
+from reportlab.platypus import HR
 from .base_section import BaseSection
 
 
 class RemediationSection(BaseSection):
     """Remediation recommendations section."""
     
-    def _get_severity_style(self, severity: str) -> str:
-        """Get paragraph style name based on severity."""
+    def _get_severity_color(self, severity: str) -> colors.Color:
+        """Get color based on severity."""
         severity_lower = (severity or '').lower()
         if severity_lower == 'critical':
-            return 'Critical'
+            return self.colors['critical']
         elif severity_lower == 'high':
-            return 'High'
+            return self.colors['high']
         elif severity_lower == 'medium':
-            return 'Medium'
+            return self.colors['medium']
         elif severity_lower == 'low':
-            return 'Low'
-        return 'BodyText'
+            return self.colors['low']
+        return self.colors['text']
     
     def generate(self, data: dict) -> List:
         """Generate remediation recommendations content."""
@@ -77,6 +78,8 @@ class RemediationSection(BaseSection):
                 self.styles['BodyText']
             ))
             
+            story.append(Spacer(1, 0.05*inch))
+            
             # Check for patch availability
             has_patch = any(cve.patch_available for cve in component.cves)
             if has_patch:
@@ -90,7 +93,7 @@ class RemediationSection(BaseSection):
                     self.styles['BodyText']
                 ))
             
-            story.append(Spacer(1, 0.05*inch))
+            story.append(Spacer(1, 0.1*inch))
             
             # Affected CVEs (top 5)
             story.append(Paragraph("<b>Affected CVEs (Top 5):</b>", self.styles['BodyText']))
@@ -108,7 +111,9 @@ class RemediationSection(BaseSection):
                 ))
             
             story.append(Spacer(1, 0.1*inch))
-            story.append(Paragraph("—" * 50, self.styles['BodyText']))
-            story.append(Spacer(1, 0.1*inch))
+            
+            # Horizontal rule separator
+            story.append(HR(width=6*inch, thickness=1, color=self.colors['border']))
+            story.append(Spacer(1, 0.15*inch))
         
         return story
