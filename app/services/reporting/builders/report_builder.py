@@ -28,9 +28,9 @@ class ReportBuilder:
     """Builder class for generating PDF reports."""
     
     def __init__(self):
+        self.colors = COLORS
         self.styles = getSampleStyleSheet()
         self._setup_custom_styles()
-        self.colors = COLORS
     
     def _setup_custom_styles(self):
         """Setup custom paragraph styles for the report."""
