@@ -10,6 +10,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate
 
 from app.models.component import Component
 from app.models.application import Application

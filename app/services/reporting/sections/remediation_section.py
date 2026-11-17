@@ -103,7 +103,7 @@ class RemediationSection(BaseSection):
             for cve in sorted_cves:
                 severity_style = self._get_severity_style(cve.severity)
                 story.append(Paragraph(
-                    f"• {cve.cve_id} - <span styleName='{severity_style}'>{cve.severity or 'Unknown'}</span> (CVSS: {cve.cvss_score or 'N/A'})",
+                    f"• {cve.cve_id} - <span style='{severity_style}'>{cve.severity or 'Unknown'}</span> (CVSS: {cve.cvss_score or 'N/A'})",
                     self.styles['TableText']
                 ))
             

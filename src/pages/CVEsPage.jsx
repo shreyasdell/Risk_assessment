@@ -102,7 +102,7 @@ function CVEsPage() {
 
   const handleGenerateReport = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       const url = new URL('http://localhost:8000/reports/generate-pdf');
       
       if (applicationFilter) {
