@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
@@ -158,14 +158,14 @@ def sync_all_cves(
     application_id: Optional[int] = Query(None),
     force_refresh: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_write_access),
-    background_tasks: BackgroundTasks = Depends()
+    current_user: User = Depends(require_write_access)
 ):
     """
     Sync CVEs for all components (optionally filtered by application).
     Returns job_id immediately for progress tracking.
     """
     from app.models.component import Component
+    import asyncio
     
     # Get components to sync
     query = db.query(Component)
@@ -218,7 +218,8 @@ def sync_all_cves(
         finally:
             db_sync.close()
     
-    background_tasks.add_task(run_sync)
+    # Run in background
+    asyncio.create_task(run_sync())
     
     return {"job_id": job.id, "total_components": len(components)}
 
