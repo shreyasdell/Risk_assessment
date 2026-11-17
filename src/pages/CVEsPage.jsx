@@ -14,6 +14,7 @@ function CVEsPage() {
   const [pageSize, setPageSize] = useState(50);
   const [totalCVEs, setTotalCVEs] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [reportType, setReportType] = useState('full');
   const { canDelete } = useAuth();
   const navigate = useNavigate();
 
@@ -107,6 +108,7 @@ function CVEsPage() {
       if (applicationFilter) {
         url.searchParams.append('application_id', applicationFilter);
       }
+      url.searchParams.append('report_type', reportType);
       
       const response = await fetch(url, {
         headers: {
@@ -158,6 +160,10 @@ function CVEsPage() {
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
+          </select>
+          <select value={reportType} onChange={(e) => setReportType(e.target.value)} style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', color: '#202020' }}>
+            <option value="full">Full Report</option>
+            <option value="executive">Executive Summary</option>
           </select>
           <button onClick={handleGenerateReport} style={{ padding: '8px 16px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#107C10', color: '#FFFFFF', cursor: 'pointer' }}>Generate Report</button>
           {!syncing && <button onClick={handleSync} style={{ padding: '8px 16px', fontSize: '14px', border: '1px solid #D9D9D9', borderRadius: '4px', backgroundColor: '#0076CE', color: '#FFFFFF', cursor: 'pointer' }}>Sync CVEs</button>}

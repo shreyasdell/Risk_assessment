@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_write_access
 from app.models.user import User
-from app.services.pdf_report_service import pdf_report_service
+from app.services.reporting.report_service import pdf_report_service
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 def generate_pdf_report(
     application_id: Optional[int] = Query(None, description="Filter by application ID"),
     sbom_id: Optional[str] = Query(None, description="Filter by SBOM ID"),
+    report_type: str = Query("full", description="Report type: 'full' or 'executive'"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -31,16 +32,25 @@ def generate_pdf_report(
     Query Parameters:
     - application_id: Optional application ID to filter components
     - sbom_id: Optional SBOM ID to filter components
+    - report_type: 'full' for complete report, 'executive' for summary only
     
     Returns:
     - PDF file as binary response
     """
     try:
+        # Validate report_type
+        if report_type not in ['full', 'executive']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="report_type must be 'full' or 'executive'"
+            )
+        
         # Generate PDF
         pdf_buffer = pdf_report_service.generate_report(
             db=db,
             application_id=application_id,
-            sbom_id=sbom_id
+            sbom_id=sbom_id,
+            report_type=report_type
         )
         
         # Generate filename
