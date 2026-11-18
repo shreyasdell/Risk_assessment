@@ -191,10 +191,21 @@ def sync_all_cves(
     db.refresh(job)
     
     # Run sync in background
-    def run_sync():
+    def run_sync(job_id: int, component_ids: list):
         from app.core.database import SessionLocal
+        from app.models.sync_job import SyncJob
+        from app.models.component import Component
         db_sync = SessionLocal()
         try:
+            # Re-fetch job in this session
+            job = db_sync.query(SyncJob).filter(SyncJob.id == job_id).first()
+            if not job:
+                print(f"[BULK SYNC] Job {job_id} not found")
+                return
+            
+            # Fetch components in this session
+            components = db_sync.query(Component).filter(Component.id.in_(component_ids)).all()
+            
             for i, component in enumerate(components):
                 try:
                     # Update job progress
@@ -212,13 +223,15 @@ def sync_all_cves(
             job.completed_at = datetime.utcnow()
             db_sync.commit()
         except Exception as e:
-            job.status = 'failed'
-            job.completed_at = datetime.utcnow()
-            db_sync.commit()
+            print(f"[BULK SYNC] Error: {str(e)}")
+            if job:
+                job.status = 'failed'
+                job.completed_at = datetime.utcnow()
+                db_sync.commit()
         finally:
             db_sync.close()
     
-    background_tasks.add_task(run_sync)
+    background_tasks.add_task(run_sync, job.id, [c.id for c in components])
     
     return {"job_id": job.id, "total_components": len(components)}
 
