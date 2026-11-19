@@ -37,10 +37,12 @@ function AuditPage() {
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
       const response = await fetchAuditLogs(params);
-      setLogs(response.data);
-      setTotalLogs(response.total);
+      setLogs(Array.isArray(response.data) ? response.data : []);
+      setTotalLogs(response.total || 0);
     } catch (err) {
       console.error('Error loading audit logs:', err);
+      setLogs([]);
+      setTotalLogs(0);
     } finally {
       setLoading(false);
     }
@@ -53,10 +55,12 @@ function AuditPage() {
         limit: pageSize,
       };
       const response = await fetchScanHistory(params);
-      setScanHistory(response.data);
-      setTotalLogs(response.total);
+      setScanHistory(Array.isArray(response.data) ? response.data : []);
+      setTotalLogs(response.total || 0);
     } catch (err) {
       console.error('Error loading scan history:', err);
+      setScanHistory([]);
+      setTotalLogs(0);
     } finally {
       setLoading(false);
     }
