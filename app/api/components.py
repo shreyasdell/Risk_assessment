@@ -138,7 +138,7 @@ def upload_sbom(
             db=db,
             action="UPLOAD",
             resource_type="sbom",
-            resource_id=result.get("sbom_id"),
+            resource_id=application_id,
             description=f"SBOM uploaded: {file.filename}",
             details={
                 "filename": file.filename,

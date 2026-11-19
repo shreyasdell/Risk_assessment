@@ -131,7 +131,7 @@ def delete_application_endpoint(
     app_info = {
         "name": db_application.name,
         "vendor_id": db_application.vendor_id,
-        "criticality": db_application.criticality.value if db_application.criticality else None
+        "criticality": db_application.criticality if db_application.criticality else None
     }
     
     success = delete_application(db, application_id=application_id)
