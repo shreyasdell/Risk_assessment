@@ -718,8 +718,26 @@ class NVDService:
         self,
         cve_data: Dict
     ) -> Tuple[float, str, str]:
-        """Extract CVSS score trying v3.1, v3.0, v2 in order."""
+        """Extract CVSS score trying v4.0, v3.1, v3.0, v2 in order."""
         metrics = cve_data.get("metrics", {})
+
+        # CVSS v4.0
+        v40 = metrics.get("cvssMetricV40", [])
+        if v40:
+            cvss = v40[0].get("cvssData", {})
+            score = cvss.get("baseScore", 0.0)
+            severity = cvss.get("baseSeverity", "UNKNOWN")
+            # Calculate severity from score if not provided
+            if severity == "UNKNOWN":
+                if score >= 9.0:
+                    severity = "CRITICAL"
+                elif score >= 7.0:
+                    severity = "HIGH"
+                elif score >= 4.0:
+                    severity = "MEDIUM"
+                else:
+                    severity = "LOW"
+            return (score, cvss.get("vectorString", ""), severity)
 
         # CVSS v3.1
         v31 = metrics.get("cvssMetricV31", [])
@@ -1104,7 +1122,17 @@ class NVDService:
                 existing.cvss_score = cvss_score
                 existing.cvss_vector = cvss_vector
                 existing.severity = severity
-                existing.cwe_id = parsed_data.get("cwe_id")
+                
+                # CWE ID: use CVE.org if available, otherwise fetch from NVD
+                cwe_id = parsed_data.get("cwe_id")
+                if not cwe_id:
+                    nvd_data = self._fetch_cve_from_nvd_sync(cve_id)
+                    if nvd_data:
+                        cwe_id = self._extract_cwe(nvd_data)
+                        if cwe_id:
+                            print(f"[NVD] Fetched CWE from NVD for {cve_id}: {cwe_id}")
+                existing.cwe_id = cwe_id
+                
                 existing.published_date = self._parse_date(parsed_data.get("published_date"))
                 existing.exploit_available = parsed_data.get("exploit_available", False)
                 existing.patch_available = parsed_data.get("patch_available", False)
@@ -1169,13 +1197,22 @@ class NVDService:
                             references = json.dumps(nvd_references)
                             print(f"[NVD] Fetched references from NVD for {cve_id}")
 
+                # CWE ID: use CVE.org if available, otherwise fetch from NVD
+                cwe_id = parsed_data.get("cwe_id")
+                if not cwe_id:
+                    nvd_data = self._fetch_cve_from_nvd_sync(cve_id)
+                    if nvd_data:
+                        cwe_id = self._extract_cwe(nvd_data)
+                        if cwe_id:
+                            print(f"[NVD] Fetched CWE from NVD for {cve_id}: {cwe_id}")
+
                 cve_record = CVE(
                     cve_id=cve_id,
                     description=description,
                     cvss_score=cvss_score,
                     cvss_vector=cvss_vector,
                     severity=severity,
-                    cwe_id=parsed_data.get("cwe_id"),
+                    cwe_id=cwe_id,
                     published_date=self._parse_date(parsed_data.get("published_date")),
                     exploit_available=parsed_data.get("exploit_available", False),
                     patch_available=parsed_data.get("patch_available", False),
