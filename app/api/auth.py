@@ -12,7 +12,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user: UserCreate, request: Request, db: Session = Depends(get_db)):
+def register(request: Request, user: UserCreate, db: Session = Depends(get_db)):
     db_user = get_user_by_username(db, username=user.username)
     if db_user:
         raise HTTPException(
@@ -43,7 +43,7 @@ def register(user: UserCreate, request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(user_login: UserLogin, request: Request, db: Session = Depends(get_db)):
+def login(request: Request, user_login: UserLogin, db: Session = Depends(get_db)):
     token = login_user(db=db, user_login=user_login)
     if not token:
         # Log failed login attempt
@@ -112,9 +112,9 @@ def read_user(
 
 @router.put("/users/{user_id}", response_model=UserResponse)
 def update_user_endpoint(
+    request: Request,
     user_id: int,
     user_update: UserUpdate,
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_management)
 ):

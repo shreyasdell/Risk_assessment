@@ -129,9 +129,9 @@ def delete_cve_endpoint(
 
 @router.post("/sync/{component_id}", response_model=List[CVEResponse])
 def sync_cves_for_component(
+    request: Request,
     component_id: int,
     force_refresh: bool = Query(False),
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -179,9 +179,9 @@ def sync_cves_for_component(
 
 @router.post("/sync-all", response_model=dict)
 def sync_all_cves(
+    request: Request,
     application_id: Optional[int] = Query(None),
     force_refresh: bool = Query(False),
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access),
     background_tasks: BackgroundTasks = BackgroundTasks()

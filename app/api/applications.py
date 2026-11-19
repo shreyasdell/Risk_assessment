@@ -24,8 +24,8 @@ router = APIRouter(prefix="/applications", tags=["Applications"])
 
 @router.post("/", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
 def create_application_endpoint(
-    application: ApplicationCreate,
     request: Request,
+    application: ApplicationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -74,9 +74,9 @@ def read_application(
 
 @router.put("/{application_id}", response_model=ApplicationResponse)
 def update_application_endpoint(
+    request: Request,
     application_id: int,
     application: ApplicationUpdate,
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -119,8 +119,8 @@ def update_application_endpoint(
 
 @router.delete("/{application_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_application_endpoint(
-    application_id: int,
     request: Request,
+    application_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_delete_access)
 ):

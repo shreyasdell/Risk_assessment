@@ -85,10 +85,10 @@ def delete_component_endpoint(
 
 @router.post("/upload-sbom", status_code=status.HTTP_201_CREATED)
 def upload_sbom(
+    request: Request,
     file: UploadFile = File(...),
     application_id: Optional[int] = Form(None),
     replace_existing: bool = Form(False),
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):

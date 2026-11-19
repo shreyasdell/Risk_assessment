@@ -20,6 +20,7 @@ router = APIRouter(prefix="/remediations", tags=["Remediations"])
 
 @router.post("/", summary="Create remediation task")
 def create_remediation(
+    request: Request,
     application_id: int,
     cve_id: int,
     component_id: Optional[int] = None,
@@ -27,7 +28,6 @@ def create_remediation(
     assigned_to: Optional[str] = None,
     due_date: Optional[str] = None,
     recommended_action: Optional[str] = None,
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -121,6 +121,7 @@ def get_remediation(
     summary="Update remediation"
 )
 def update_remediation(
+    request: Request,
     remediation_id: int,
     status: Optional[str] = None,
     priority: Optional[str] = None,
@@ -128,7 +129,6 @@ def update_remediation(
     due_date: Optional[str] = None,
     resolution_notes: Optional[str] = None,
     recommended_action: Optional[str] = None,
-    request: Request,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -181,10 +181,10 @@ def update_remediation(
     summary="Update remediation status"
 )
 def update_status(
+    request: Request,
     remediation_id: int,
     new_status: str,
     resolution_notes: Optional[str] = None,
-    request: Request,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -228,8 +228,8 @@ def update_status(
     summary="Delete remediation"
 )
 def delete_remediation(
-    remediation_id: int,
     request: Request,
+    remediation_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):

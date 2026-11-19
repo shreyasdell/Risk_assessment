@@ -24,8 +24,8 @@ router = APIRouter(prefix="/vendors", tags=["Vendors"])
 
 @router.post("/", response_model=VendorResponse, status_code=status.HTTP_201_CREATED)
 def create_vendor_endpoint(
-    vendor: VendorCreate,
     request: Request,
+    vendor: VendorCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -208,9 +208,9 @@ def calculate_vendor_risk(
 
 @router.put("/{vendor_id}", response_model=VendorResponse)
 def update_vendor_endpoint(
+    request: Request,
     vendor_id: int,
     vendor: VendorUpdate,
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -257,8 +257,8 @@ def update_vendor_endpoint(
 
 @router.delete("/{vendor_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_vendor_endpoint(
-    vendor_id: int,
     request: Request,
+    vendor_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_delete_access)
 ):

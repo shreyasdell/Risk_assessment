@@ -21,10 +21,10 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 
 @router.get("/generate-pdf", summary="Generate PDF vulnerability assessment report")
 def generate_pdf_report(
+    request: Request,
     application_id: Optional[int] = Query(None, description="Filter by application ID"),
     sbom_id: Optional[str] = Query(None, description="Filter by SBOM ID"),
     report_type: str = Query("full", description="Report type: 'full' or 'executive'"),
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
