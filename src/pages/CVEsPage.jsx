@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { fetchCVEs, deleteCVE, fetchApplications, syncAllCVEs } from '../api/client';
 import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -7,17 +7,50 @@ import { useAuth } from '../context/AuthContext';
 function CVEsPage() {
   const [cves, setCves] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [severityFilter, setSeverityFilter] = useState('');
-  const [applicationFilter, setApplicationFilter] = useState('');
+  const [severityFilter, setSeverityFilter] = useState(() => localStorage.getItem('cve_severity_filter') || '');
+  const [applicationFilter, setApplicationFilter] = useState(() => localStorage.getItem('cve_application_filter') || '');
   const [applications, setApplications] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [totalCVEs, setTotalCVEs] = useState(0);
-  const [syncing, setSyncing] = useState(false);
-  const [syncJob, setSyncJob] = useState(null);
+  const [syncing, setSyncing] = useState(() => localStorage.getItem('cve_syncing') === 'true');
+  const [syncJob, setSyncJob] = useState(() => {
+    const saved = localStorage.getItem('cve_sync_job');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [reportType, setReportType] = useState('full');
+  const pollIntervalRef = useRef(null);
   const { canDelete } = useAuth();
   const navigate = useNavigate();
+
+  // Persist filters to localStorage
+  useEffect(() => {
+    localStorage.setItem('cve_severity_filter', severityFilter);
+  }, [severityFilter]);
+
+  useEffect(() => {
+    localStorage.setItem('cve_application_filter', applicationFilter);
+  }, [applicationFilter]);
+
+  // Persist sync state to localStorage
+  useEffect(() => {
+    localStorage.setItem('cve_syncing', syncing);
+  }, [syncing]);
+
+  useEffect(() => {
+    if (syncJob) {
+      localStorage.setItem('cve_sync_job', JSON.stringify(syncJob));
+    } else {
+      localStorage.removeItem('cve_sync_job');
+    }
+  }, [syncJob]);
+
+  // Resume polling if sync was in progress
+  useEffect(() => {
+    if (syncing && syncJob && syncJob.status === 'running') {
+      pollSyncProgress(syncJob.id);
+    }
+  }, []);
 
   useEffect(() => {
     loadApplications();
@@ -105,7 +138,12 @@ function CVEsPage() {
   };
 
   const pollSyncProgress = (jobId) => {
-    const pollInterval = setInterval(async () => {
+    // Clear any existing interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+
+    pollIntervalRef.current = setInterval(async () => {
       try {
         const token = localStorage.getItem('access_token');
         const response = await fetch(`http://localhost:8000/cves/sync-jobs/${jobId}`, {
@@ -120,8 +158,10 @@ function CVEsPage() {
           
           // Stop polling if job is completed or failed
           if (jobData.status === 'completed' || jobData.status === 'failed') {
-            clearInterval(pollInterval);
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
             setSyncing(false);
+            setSyncJob(null);
             loadCVEs(); // Reload CVEs after sync completes
             
             if (jobData.status === 'completed') {
@@ -133,11 +173,22 @@ function CVEsPage() {
         }
       } catch (err) {
         console.error('Error polling sync progress:', err);
-        clearInterval(pollInterval);
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
         setSyncing(false);
+        setSyncJob(null);
       }
     }, 5000); // Poll every 5 seconds
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
 
   const handleGenerateReport = async () => {
     try {
