@@ -206,6 +206,9 @@ export const fetchAuditLogs = (params = {}) =>
 export const fetchRecentActivity = (limit = 20) =>
   apiClient.get('/audit-logs/recent', { params: { limit } });
 
+export const fetchScanHistory = (params = {}) =>
+  apiClient.get('/audit-logs/scan-history', { params });
+
 // User Management
 export const getUsers = (params = {}) =>
   apiClient.get('/auth/users', { params });

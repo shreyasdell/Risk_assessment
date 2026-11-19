@@ -13,6 +13,7 @@ from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_admin
 from app.models.user import User
 from app.models.audit_log import AuditLog
+from app.models.background_task import BackgroundTask
 
 router = APIRouter(prefix="/audit-logs", tags=["Audit Logs"])
 
@@ -70,3 +71,34 @@ def recent_activity(
 ):
     """Get most recent audit entries for activity feed."""
     return db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit).all()
+
+
+@router.get("/scan-history", summary="Scan history")
+def scan_history(
+    application_id: Optional[int] = Query(None, description="Filter by application ID"),
+    task_type: Optional[str] = Query(None, description="Filter by task type"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get scan history from background_tasks table."""
+    query = db.query(BackgroundTask)
+    
+    if application_id:
+        query = query.filter(BackgroundTask.application_id == application_id)
+    if task_type:
+        query = query.filter(BackgroundTask.task_type == task_type)
+    if status:
+        query = query.filter(BackgroundTask.status == status)
+    
+    total = query.count()
+    tasks = query.order_by(BackgroundTask.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return {
+        "data": [task.to_dict() for task in tasks],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
