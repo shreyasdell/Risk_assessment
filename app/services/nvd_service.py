@@ -13,6 +13,7 @@ which has complete CPE and version range data.
 import httpx
 import asyncio
 import re
+import json
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Tuple
 from sqlalchemy.orm import Session
@@ -1060,6 +1061,7 @@ class NVDService:
         # This ensures stale/unverified CVEs from previous syncs are removed
         old_cve_count = len(component.cves)
         component.cves.clear()
+        db.flush()  # Flush the clear operation
         print(f"[NVD] Cleared {old_cve_count} old CVE links for {component.name} {component.version}")
 
         # Save verified CVEs to database
@@ -1193,11 +1195,16 @@ class NVDService:
             # Link CVE to component if not already linked
             if cve_record not in component.cves:
                 component.cves.append(cve_record)
+                print(f"[NVD] Linked CVE {cve_id} to component {component.name} {component.version}")
+            else:
+                print(f"[NVD] CVE {cve_id} already linked to component {component.name} {component.version}")
 
             saved_cves.append(cve_record)
 
+        db.flush()  # Ensure all pending changes are written
         db.commit()
         print(f"[NVD] Saved {len(saved_cves)} verified CVEs for {component.name} {component.version}")
+        print(f"[NVD] Component now has {len(component.cves)} CVEs linked")
         return saved_cves
 
 
