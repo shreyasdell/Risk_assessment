@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
@@ -18,6 +18,7 @@ from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
 from app.models.sync_job import SyncJob
+from app.services.audit_service import audit_service
 from datetime import datetime
 
 router = APIRouter(prefix="/cves", tags=["CVEs"])
@@ -130,6 +131,7 @@ def delete_cve_endpoint(
 def sync_cves_for_component(
     component_id: int,
     force_refresh: bool = Query(False),
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -145,6 +147,28 @@ def sync_cves_for_component(
     
     try:
         cves = nvd_service.sync_component_cves(db, component)
+        
+        # Log CVE sync
+        audit_service.log(
+            db=db,
+            action="SYNC",
+            resource_type="cve",
+            resource_id=component_id,
+            description=f"CVE sync for component: {component.name} {component.version}",
+            details={
+                "component_id": component_id,
+                "component_name": component.name,
+                "component_version": component.version,
+                "cves_found": len(cves),
+                "force_refresh": force_refresh
+            },
+            user_id=current_user.id,
+            username=current_user.username,
+            user_role=current_user.role,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+        
         return cves
     except Exception as e:
         raise HTTPException(
@@ -157,6 +181,7 @@ def sync_cves_for_component(
 def sync_all_cves(
     application_id: Optional[int] = Query(None),
     force_refresh: bool = Query(False),
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access),
     background_tasks: BackgroundTasks = BackgroundTasks()
@@ -189,6 +214,26 @@ def sync_all_cves(
     db.add(job)
     db.commit()
     db.refresh(job)
+    
+    # Log bulk sync start
+    audit_service.log(
+        db=db,
+        action="SYNC",
+        resource_type="cve",
+        resource_id=application_id,
+        description=f"Bulk CVE sync started for {len(components)} components",
+        details={
+            "application_id": application_id,
+            "total_components": len(components),
+            "force_refresh": force_refresh,
+            "job_id": job.id
+        },
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
     
     # Run sync in background
     def run_sync(job_id: int, component_ids: list):

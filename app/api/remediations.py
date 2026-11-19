@@ -3,7 +3,7 @@ Remediation API Router
 Endpoints for tracking vulnerability remediation.
 """
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
@@ -12,6 +12,8 @@ from app.core.database import get_db
 from app.auth.dependencies import get_current_user
 from app.auth.rbac import require_write_access, require_delete_access
 from app.services.remediation_service import remediation_service
+from app.services.audit_service import audit_service
+from app.models.user import User
 
 router = APIRouter(prefix="/remediations", tags=["Remediations"])
 
@@ -25,8 +27,9 @@ def create_remediation(
     assigned_to: Optional[str] = None,
     due_date: Optional[str] = None,
     recommended_action: Optional[str] = None,
+    request: Request,
     db: Session = Depends(get_db),
-    current_user=Depends(require_write_access)
+    current_user: User = Depends(require_write_access)
 ):
     """
     Create a new remediation task to track fixing a CVE.
@@ -43,7 +46,7 @@ def create_remediation(
                 detail="Invalid date format. Use ISO format."
             )
 
-    return remediation_service.create_remediation(
+    result = remediation_service.create_remediation(
         db=db,
         application_id=application_id,
         cve_id=cve_id,
@@ -53,6 +56,28 @@ def create_remediation(
         due_date=parsed_due,
         recommended_action=recommended_action
     )
+    
+    audit_service.log(
+        db=db,
+        action="CREATE",
+        resource_type="remediation",
+        resource_id=result.id,
+        description=f"Remediation created for CVE {cve_id}",
+        details={
+            "application_id": application_id,
+            "cve_id": cve_id,
+            "component_id": component_id,
+            "priority": priority,
+            "assigned_to": assigned_to
+        },
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    return result
 
 
 @router.get("/", summary="List all remediations")
@@ -103,6 +128,7 @@ def update_remediation(
     due_date: Optional[str] = None,
     resolution_notes: Optional[str] = None,
     recommended_action: Optional[str] = None,
+    request: Request,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -127,11 +153,27 @@ def update_remediation(
                 detail="Invalid date format"
             )
 
-    return remediation_service.update_remediation(
+    result = remediation_service.update_remediation(
         db=db,
         remediation_id=remediation_id,
         **kwargs
     )
+    
+    audit_service.log(
+        db=db,
+        action="UPDATE",
+        resource_type="remediation",
+        resource_id=remediation_id,
+        description=f"Remediation updated: {remediation_id}",
+        details={"updated_fields": list(kwargs.keys()), "changed_by": current_user.username},
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    return result
 
 
 @router.patch(
@@ -142,6 +184,7 @@ def update_status(
     remediation_id: int,
     new_status: str,
     resolution_notes: Optional[str] = None,
+    request: Request,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -156,12 +199,28 @@ def update_status(
     - Risk Accepted
     - False Positive
     """
-    return remediation_service.update_status(
+    result = remediation_service.update_status(
         db=db,
         remediation_id=remediation_id,
         new_status=new_status,
         resolution_notes=resolution_notes
     )
+    
+    audit_service.log(
+        db=db,
+        action="UPDATE",
+        resource_type="remediation",
+        resource_id=remediation_id,
+        description=f"Remediation status changed to {new_status}",
+        details={"new_status": new_status, "resolution_notes": resolution_notes, "changed_by": current_user.username},
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    return result
 
 
 @router.delete(
@@ -170,11 +229,27 @@ def update_status(
 )
 def delete_remediation(
     remediation_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
     """Delete a remediation record."""
     remediation_service.delete_remediation(db, remediation_id)
+    
+    audit_service.log(
+        db=db,
+        action="DELETE",
+        resource_type="remediation",
+        resource_id=remediation_id,
+        description=f"Remediation deleted: {remediation_id}",
+        details={"deleted_by": current_user.username},
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
     return {"message": "Remediation deleted"}
 
 

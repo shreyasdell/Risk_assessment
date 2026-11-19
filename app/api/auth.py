@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.user import UserCreate, UserResponse, UserLogin, Token, UserUpdate
@@ -6,12 +6,13 @@ from app.services.auth_service import create_user, login_user, get_user_by_usern
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_admin, require_user_management
 from app.models.user import User
+from app.services.audit_service import audit_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user: UserCreate, db: Session = Depends(get_db)):
+def register(user: UserCreate, request: Request, db: Session = Depends(get_db)):
     db_user = get_user_by_username(db, username=user.username)
     if db_user:
         raise HTTPException(
@@ -24,18 +25,60 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
-    return create_user(db=db, user=user)
+    result = create_user(db=db, user=user)
+    
+    # Log registration
+    audit_service.log(
+        db=db,
+        action="CREATE",
+        resource_type="user",
+        resource_id=result.id,
+        description=f"User registered: {user.username}",
+        details={"username": user.username, "email": user.email, "role": user.role},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    return result
 
 
 @router.post("/login", response_model=Token)
-def login(user_login: UserLogin, db: Session = Depends(get_db)):
+def login(user_login: UserLogin, request: Request, db: Session = Depends(get_db)):
     token = login_user(db=db, user_login=user_login)
     if not token:
+        # Log failed login attempt
+        audit_service.log(
+            db=db,
+            action="LOGIN_FAILED",
+            resource_type="user",
+            description=f"Failed login attempt for username: {user_login.username}",
+            details={"username": user_login.username},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Log successful login
+    user = get_user_by_username(db, username=user_login.username)
+    if user:
+        audit_service.log(
+            db=db,
+            action="LOGIN",
+            resource_type="user",
+            resource_id=user.id,
+            description=f"User logged in: {user.username}",
+            details={"username": user.username, "role": user.role},
+            user_id=user.id,
+            username=user.username,
+            user_role=user.role,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+    
     return token
 
 
@@ -71,6 +114,7 @@ def read_user(
 def update_user_endpoint(
     user_id: int,
     user_update: UserUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_management)
 ):
@@ -85,12 +129,47 @@ def update_user_endpoint(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    return update_user(db=db, user_id=user_id, user_update=user_update)
+    # Store old values for audit
+    old_values = {
+        "username": db_user.username,
+        "email": db_user.email,
+        "role": db_user.role,
+        "is_active": db_user.is_active
+    }
+    
+    result = update_user(db=db, user_id=user_id, user_update=user_update)
+    
+    # Log user update
+    audit_service.log(
+        db=db,
+        action="UPDATE",
+        resource_type="user",
+        resource_id=user_id,
+        description=f"User updated: {db_user.username}",
+        details={
+            "old_values": old_values,
+            "new_values": {
+                "username": result.username,
+                "email": result.email,
+                "role": result.role,
+                "is_active": result.is_active
+            },
+            "changed_by": current_user.username
+        },
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    return result
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_management)
 ):
@@ -104,6 +183,29 @@ def delete_user(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Store user info for audit before deletion
+    user_info = {
+        "username": db_user.username,
+        "email": db_user.email,
+        "role": db_user.role
+    }
+    
     db.delete(db_user)
     db.commit()
+    
+    # Log user deletion
+    audit_service.log(
+        db=db,
+        action="DELETE",
+        resource_type="user",
+        resource_id=user_id,
+        description=f"User deleted: {user_info['username']}",
+        details={"deleted_user": user_info, "deleted_by": current_user.username},
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
     return None

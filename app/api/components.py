@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
@@ -14,6 +14,7 @@ from app.services.sbom_service import process_sbom_upload
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
+from app.services.audit_service import audit_service
 
 router = APIRouter(prefix="/components", tags=["Components"])
 
@@ -87,6 +88,7 @@ def upload_sbom(
     file: UploadFile = File(...),
     application_id: Optional[int] = Form(None),
     replace_existing: bool = Form(False),
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -130,6 +132,27 @@ def upload_sbom(
             application_id=application_id,
             replace_existing=replace_existing
         )
+        
+        # Log SBOM upload
+        audit_service.log(
+            db=db,
+            action="UPLOAD",
+            resource_type="sbom",
+            resource_id=result.get("sbom_id"),
+            description=f"SBOM uploaded: {file.filename}",
+            details={
+                "filename": file.filename,
+                "application_id": application_id,
+                "replace_existing": replace_existing,
+                "components_count": result.get("components_count", 0)
+            },
+            user_id=current_user.id,
+            username=current_user.username,
+            user_role=current_user.role,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+        
         return result
     except ValueError as e:
         print(f"ERROR: ValueError in SBOM processing: {e}")

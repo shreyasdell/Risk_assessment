@@ -4,7 +4,7 @@ Reports API Router
 Provides endpoints for generating PDF reports.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -14,6 +14,7 @@ from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_write_access
 from app.models.user import User
 from app.services.reporting.report_service import pdf_report_service
+from app.services.audit_service import audit_service
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -23,6 +24,7 @@ def generate_pdf_report(
     application_id: Optional[int] = Query(None, description="Filter by application ID"),
     sbom_id: Optional[str] = Query(None, description="Filter by SBOM ID"),
     report_type: str = Query("full", description="Report type: 'full' or 'executive'"),
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -64,6 +66,25 @@ def generate_pdf_report(
                 app_name = f"_{app.name.replace(' ', '_')}"
         
         filename = f"vulnerability_report{app_name}_{timestamp}.pdf"
+        
+        # Log report generation
+        audit_service.log(
+            db=db,
+            action="EXPORT",
+            resource_type="report",
+            description=f"PDF report generated: {report_type}",
+            details={
+                "application_id": application_id,
+                "sbom_id": sbom_id,
+                "report_type": report_type,
+                "filename": filename
+            },
+            user_id=current_user.id,
+            username=current_user.username,
+            user_role=current_user.role,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
         
         # Return PDF as response
         return Response(

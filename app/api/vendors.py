@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
@@ -17,6 +17,7 @@ from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
 from app.models.vendor import Vendor
 from app.models.application import Application
+from app.services.audit_service import audit_service
 
 router = APIRouter(prefix="/vendors", tags=["Vendors"])
 
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/vendors", tags=["Vendors"])
 @router.post("/", response_model=VendorResponse, status_code=status.HTTP_201_CREATED)
 def create_vendor_endpoint(
     vendor: VendorCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
@@ -33,7 +35,24 @@ def create_vendor_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Vendor with this name already exists"
         )
-    return create_vendor(db=db, vendor=vendor)
+    result = create_vendor(db=db, vendor=vendor)
+    
+    # Log vendor creation
+    audit_service.log(
+        db=db,
+        action="CREATE",
+        resource_type="vendor",
+        resource_id=result.id,
+        description=f"Vendor created: {vendor.name}",
+        details={"name": vendor.name, "country": vendor.country, "service_type": vendor.service_type},
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    return result
 
 
 @router.get("/", response_model=List[VendorResponse])
@@ -191,22 +210,87 @@ def calculate_vendor_risk(
 def update_vendor_endpoint(
     vendor_id: int,
     vendor: VendorUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
-    db_vendor = update_vendor(db, vendor_id=vendor_id, vendor=vendor)
-    if db_vendor is None:
+    db_vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not db_vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
-    return db_vendor
+    
+    # Store old values
+    old_values = {
+        "name": db_vendor.name,
+        "country": db_vendor.country,
+        "service_type": db_vendor.service_type,
+        "tier": db_vendor.tier
+    }
+    
+    result = update_vendor(db, vendor_id=vendor_id, vendor=vendor)
+    
+    # Log vendor update
+    audit_service.log(
+        db=db,
+        action="UPDATE",
+        resource_type="vendor",
+        resource_id=vendor_id,
+        description=f"Vendor updated: {old_values['name']}",
+        details={
+            "old_values": old_values,
+            "new_values": {
+                "name": result.name,
+                "country": result.country,
+                "service_type": result.service_type,
+                "tier": result.tier
+            },
+            "changed_by": current_user.username
+        },
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    return result
 
 
 @router.delete("/{vendor_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_vendor_endpoint(
     vendor_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_delete_access)
 ):
+    db_vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not db_vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    # Store vendor info before deletion
+    vendor_info = {
+        "name": db_vendor.name,
+        "country": db_vendor.country,
+        "service_type": db_vendor.service_type,
+        "tier": db_vendor.tier
+    }
+    
     success = delete_vendor(db, vendor_id=vendor_id)
     if not success:
         raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    # Log vendor deletion
+    audit_service.log(
+        db=db,
+        action="DELETE",
+        resource_type="vendor",
+        resource_id=vendor_id,
+        description=f"Vendor deleted: {vendor_info['name']}",
+        details={"deleted_vendor": vendor_info, "deleted_by": current_user.username},
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
     return None

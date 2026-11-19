@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, Form, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, Form, File, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pathlib import Path
@@ -16,6 +16,8 @@ from app.auth.rbac import require_write_access, require_delete_access
 from app.models.user import User
 from app.models.codebase_upload import CodebaseUpload
 from app.models.component import Component
+from app.models.application import Application
+from app.services.audit_service import audit_service
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
@@ -23,10 +25,27 @@ router = APIRouter(prefix="/applications", tags=["Applications"])
 @router.post("/", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
 def create_application_endpoint(
     application: ApplicationCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
-    return create_application(db=db, application=application)
+    result = create_application(db=db, application=application)
+    
+    audit_service.log(
+        db=db,
+        action="CREATE",
+        resource_type="application",
+        resource_id=result.id,
+        description=f"Application created: {application.name}",
+        details={"name": application.name, "vendor_id": application.vendor_id, "criticality": application.criticality},
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    return result
 
 
 @router.get("/", response_model=List[ApplicationResponse])
@@ -57,24 +76,81 @@ def read_application(
 def update_application_endpoint(
     application_id: int,
     application: ApplicationUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_write_access)
 ):
-    db_application = update_application(db, application_id=application_id, application=application)
-    if db_application is None:
+    db_application = db.query(Application).filter(Application.id == application_id).first()
+    if not db_application:
         raise HTTPException(status_code=404, detail="Application not found")
-    return db_application
+    
+    old_values = {
+        "name": db_application.name,
+        "criticality": db_application.criticality.value if db_application.criticality else None,
+        "environment": db_application.environment.value if db_application.environment else None
+    }
+    
+    result = update_application(db, application_id=application_id, application=application)
+    
+    audit_service.log(
+        db=db,
+        action="UPDATE",
+        resource_type="application",
+        resource_id=application_id,
+        description=f"Application updated: {old_values['name']}",
+        details={
+            "old_values": old_values,
+            "new_values": {
+                "name": result.name,
+                "criticality": result.criticality.value if result.criticality else None,
+                "environment": result.environment.value if result.environment else None
+            },
+            "changed_by": current_user.username
+        },
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    return result
 
 
 @router.delete("/{application_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_application_endpoint(
     application_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_delete_access)
 ):
+    db_application = db.query(Application).filter(Application.id == application_id).first()
+    if not db_application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    app_info = {
+        "name": db_application.name,
+        "vendor_id": db_application.vendor_id,
+        "criticality": db_application.criticality.value if db_application.criticality else None
+    }
+    
     success = delete_application(db, application_id=application_id)
     if not success:
         raise HTTPException(status_code=404, detail="Application not found")
+    
+    audit_service.log(
+        db=db,
+        action="DELETE",
+        resource_type="application",
+        resource_id=application_id,
+        description=f"Application deleted: {app_info['name']}",
+        details={"deleted_application": app_info, "deleted_by": current_user.username},
+        user_id=current_user.id,
+        username=current_user.username,
+        user_role=current_user.role,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
 
 
 @router.post("/upload-codebase", status_code=status.HTTP_201_CREATED)
